@@ -1,8 +1,10 @@
 // One-off migration script — run with: node scripts/migrate.mjs
+// Requires DATABASE_URL to be set in the environment, e.g.:
+//   set DATABASE_URL=<your_neon_url> && node scripts/migrate.mjs
 import { neon } from '@neondatabase/serverless';
 
-const DATABASE_URL =
-  'postgresql://neondb_owner:npg_jvLMo7fYk5PJ@ep-winter-leaf-anlgz2gp-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL env variable is not set.');
 
 const sql = neon(DATABASE_URL);
 

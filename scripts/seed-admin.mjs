@@ -1,10 +1,10 @@
 // Seed script — creates the default admin user
-// Usage: node scripts/seed-admin.mjs
+// Usage: set DATABASE_URL=<your_neon_url> && node scripts/seed-admin.mjs
 import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
 
-const DATABASE_URL =
-  'postgresql://neondb_owner:npg_jvLMo7fYk5PJ@ep-winter-leaf-anlgz2gp-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error('DATABASE_URL env variable is not set.');
 
 const sql = neon(DATABASE_URL);
 
