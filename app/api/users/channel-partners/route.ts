@@ -11,10 +11,13 @@ export async function GET() {
   }
 
   const rows = await sql`
-    SELECT u.id, u.name, u.email, u.address, u.gender, u.cp_email, u.pan_card
+    SELECT u.id, u.name, u.email, u.address, u.gender, u.cp_email, u.pan_card, u.created_at,
+           COUNT(l.id)::text AS lead_count
     FROM users u
     JOIN roles r ON r.id = u.role_id
+    LEFT JOIN leads l ON l.cp_id = u.id
     WHERE r.role_name = 'channel_partner'
+    GROUP BY u.id
     ORDER BY u.created_at DESC
   `;
 
