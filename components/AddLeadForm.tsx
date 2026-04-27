@@ -13,6 +13,28 @@ interface Props {
   onSuccess?: () => void;
 }
 
+/* ── helpers ────────────────────────────────────────────── */
+/** Returns the ISO date string 18 years before today (calendar max for DOB) */
+function maxDobDate(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d.toISOString().split('T')[0];
+}
+
+/** Returns true when the selected date is ≥ 18 years ago */
+function isAtLeast18(dateStr: string): boolean {
+  if (!dateStr) return true; // DOB is optional — skip if blank
+  const dob = new Date(dateStr);
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 18);
+  return dob <= cutoff;
+}
+
+/** Returns true for a valid 10-digit Indian mobile number (starts 6–9) */
+function isValidIndianMobile(value: string): boolean {
+  return /^[6-9]\d{9}$/.test(value.trim());
+}
+
 export default function AddLeadForm({ onSuccess }: Props) {
   const [loanTypes, setLoanTypes]   = useState<LoanType[]>([]);
   const [statuses, setStatuses]     = useState<LeadStatus[]>([]);
@@ -23,6 +45,10 @@ export default function AddLeadForm({ onSuccess }: Props) {
   const [statusId, setStatusId]     = useState('');
   const [loanNumber, setLoanNumber] = useState('');
   const [loanTypeId, setLoanTypeId] = useState('');
+
+  // Inline validation errors
+  const [phoneError, setPhoneError] = useState('');
+  const [dobError, setDobError]     = useState('');
 
   const [loading, setLoading]       = useState(false);
   const [toast, setToast]           = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
@@ -46,8 +72,30 @@ export default function AddLeadForm({ onSuccess }: Props) {
     setTimeout(() => setToast(null), 3500);
   }
 
+  /* ── field-level validators ──────────────────────────── */
+  function validatePhone(value: string) {
+    if (!value) { setPhoneError('Mobile number is required.'); return false; }
+    if (!/^\d+$/.test(value.trim())) { setPhoneError('Only digits are allowed.'); return false; }
+    if (!isValidIndianMobile(value)) { setPhoneError('Enter a valid 10-digit mobile number (starts with 6–9).'); return false; }
+    setPhoneError('');
+    return true;
+  }
+
+  function validateDob(value: string) {
+    if (!value) { setDobError(''); return true; } // optional field
+    if (!isAtLeast18(value)) { setDobError('Applicant must be at least 18 years old.'); return false; }
+    setDobError('');
+    return true;
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+
+    // Run both validators; don't short-circuit so both errors show at once
+    const phoneOk = validatePhone(phone);
+    const dobOk   = validateDob(dob);
+    if (!phoneOk || !dobOk) return;
+
     setLoading(true);
 
     const res = await fetch('/api/leads', {
@@ -66,6 +114,7 @@ export default function AddLeadForm({ onSuccess }: Props) {
 
     showToast('Lead added successfully!', 'success');
     setFullName(''); setPhone(''); setDob(''); setStatusId(''); setLoanNumber(''); setLoanTypeId('');
+    setPhoneError(''); setDobError('');
     onSuccess?.();
   }
 
@@ -78,15 +127,44 @@ export default function AddLeadForm({ onSuccess }: Props) {
             <input id="lf-fullname" type="text" placeholder="Rajesh Kumar" value={fullName} onChange={e => setFullName(e.target.value)} required />
           </div>
           <div className="field">
-            <label htmlFor="lf-phone">Phone <span style={{color:'var(--danger)'}}>*</span></label>
-            <input id="lf-phone" type="tel" placeholder="9876543210" value={phone} onChange={e => setPhone(e.target.value)} required />
+            <label htmlFor="lf-phone">
+              Phone <span style={{color:'var(--danger)'}}>*</span>
+            </label>
+            <input
+              id="lf-phone"
+              type="tel"
+              inputMode="numeric"
+              placeholder="9876543210"
+              maxLength={10}
+              value={phone}
+              onChange={e => {
+                // Allow only digits while typing
+                const val = e.target.value.replace(/\D/g, '');
+                setPhone(val);
+                if (phoneError) validatePhone(val);
+              }}
+              onBlur={() => validatePhone(phone)}
+              required
+            />
+            {phoneError && <span className="field-error">{phoneError}</span>}
           </div>
         </div>
 
         <div className="form-row">
           <div className="field">
             <label htmlFor="lf-dob">Date of Birth</label>
-            <input id="lf-dob" type="date" value={dob} onChange={e => setDob(e.target.value)} />
+            <input
+              id="lf-dob"
+              type="date"
+              max={maxDobDate()}
+              value={dob}
+              onChange={e => {
+                setDob(e.target.value);
+                if (dobError) validateDob(e.target.value);
+              }}
+              onBlur={() => validateDob(dob)}
+            />
+            {dobError && <span className="field-error">{dobError}</span>}
           </div>
           <div className="field">
             <label htmlFor="lf-loan-type">Loan Type <span style={{color:'var(--danger)'}}>*</span></label>
