@@ -31,45 +31,51 @@ export async function GET(request: NextRequest) {
       ? sql`l.cp_id = ${cpIdFilter}`
       : sql`TRUE`;
 
-  const [rows, countRows] = await Promise.all([
-    sql`
-      SELECT l.id, l.full_name, l.phone, l.dob, l.loan_number, l.created_at, l.updated_at,
-             l.status_id, l.loan_type_id, l.cp_id,
-             ls.lead_status, lt.loan_type, u.name AS cp_name
-      FROM leads l
-      JOIN lead_statuses ls ON ls.id = l.status_id
-      JOIN loan_types    lt ON lt.id = l.loan_type_id
-      JOIN users          u ON u.id  = l.cp_id
-      WHERE ${scopeCondition}
-        AND ${searchCondition}
-        AND ${statusCondition}
-        AND ${loanCondition}
-        AND ${cpCondition}
-      ORDER BY l.created_at DESC
-      LIMIT ${perPage} OFFSET ${offset}
-    `,
-    sql`
-      SELECT COUNT(*) AS total
-      FROM leads l
-      WHERE ${scopeCondition}
-        AND ${searchCondition}
-        AND ${statusCondition}
-        AND ${loanCondition}
-        AND ${cpCondition}
-    `,
-  ]);
+  try {
+    const [rows, countRows] = await Promise.all([
+      sql`
+        SELECT l.id, l.full_name, l.phone, l.dob, l.loan_number, l.created_at, l.updated_at,
+               l.status_id, l.loan_type_id, l.cp_id, l.loan_amount, l.bank_name,
+               l.login_date, l.sanction_date, l.disbursal_date, l.transaction_date,
+               ls.lead_status, lt.loan_type, u.name AS cp_name
+        FROM leads l
+        JOIN lead_statuses ls ON ls.id = l.status_id
+        JOIN loan_types    lt ON lt.id = l.loan_type_id
+        JOIN users          u ON u.id  = l.cp_id
+        WHERE ${scopeCondition}
+          AND ${searchCondition}
+          AND ${statusCondition}
+          AND ${loanCondition}
+          AND ${cpCondition}
+        ORDER BY l.created_at DESC
+        LIMIT ${perPage} OFFSET ${offset}
+      `,
+      sql`
+        SELECT COUNT(*) AS total
+        FROM leads l
+        WHERE ${scopeCondition}
+          AND ${searchCondition}
+          AND ${statusCondition}
+          AND ${loanCondition}
+          AND ${cpCondition}
+      `,
+    ]);
 
-  const total = Number(countRows[0].total);
+    const total = Number(countRows[0].total);
 
-  return Response.json({
-    leads: rows,
-    pagination: {
-      total,
-      page,
-      per_page: perPage,
-      total_pages: Math.ceil(total / perPage),
-    },
-  });
+    return Response.json({
+      leads: rows,
+      pagination: {
+        total,
+        page,
+        per_page: perPage,
+        total_pages: Math.ceil(total / perPage),
+      },
+    });
+  } catch (err: any) {
+    console.error('API Error /api/leads GET:', err);
+    return Response.json({ error: err.message }, { status: 500 });
+  }
 }
 
 // POST /api/leads
@@ -77,12 +83,13 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id } =
+  const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id,
+          loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date } =
     await request.json();
 
-  if (!full_name || !phone || !status_id || !loan_type_id) {
+  if (!full_name || !phone || !status_id || !loan_type_id || !bank_name) {
     return Response.json(
-      { error: 'full_name, phone, status_id and loan_type_id are required.' },
+      { error: 'full_name, phone, status_id, loan_type_id, and bank_name are required.' },
       { status: 400 }
     );
   }
@@ -91,9 +98,12 @@ export async function POST(request: NextRequest) {
   const effectiveCpId = session.role === 'admin' ? (cp_id ?? session.userId) : session.userId;
 
   const rows = await sql`
-    INSERT INTO leads (full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id, created_by)
+    INSERT INTO leads (full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id, created_by,
+                       loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date)
     VALUES (${full_name}, ${phone}, ${dob ?? null}, ${status_id}, ${loan_number ?? null},
-            ${loan_type_id}, ${effectiveCpId}, ${session.userId})
+            ${loan_type_id}, ${effectiveCpId}, ${session.userId},
+            ${loan_amount ?? null}, ${bank_name ?? null}, ${login_date ?? null}, 
+            ${sanction_date ?? null}, ${disbursal_date ?? null}, ${transaction_date ?? null})
     RETURNING *
   `;
 

@@ -73,6 +73,12 @@ CREATE TABLE IF NOT EXISTS leads (
   loan_type_id    INT           NOT NULL REFERENCES loan_types(id) ON DELETE RESTRICT,
   cp_id           UUID          NOT NULL REFERENCES users(id) ON DELETE RESTRICT,  -- assigned channel partner
   created_by      UUID          NOT NULL REFERENCES users(id) ON DELETE RESTRICT,  -- who added the lead
+  loan_amount     NUMERIC(15,2),
+  bank_name       VARCHAR(255),
+  login_date      DATE,
+  sanction_date   DATE,
+  disbursal_date  DATE,
+  transaction_date DATE,
   created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
   updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );

@@ -3,11 +3,12 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import Modal from '@/components/Modal';
 import { toast } from '@/components/ToastContainer';
+import { BANK_NAMES } from '@/lib/constants';
 
 // ── Types ─────────────────────────────────────────────────────
 
 interface LoanType   { id: number; loan_type: string; }
-interface LeadStatus { id: number; lead_status: string; }
+interface LeadStatus { id: number; lead_status: string; stage_order: number; }
 interface ChannelPartner { id: string; name: string; }
 
 interface Lead {
@@ -23,6 +24,12 @@ interface Lead {
   status_id: number;
   loan_type_id: number;
   created_at: string;
+  loan_amount?: string;
+  bank_name?: string;
+  login_date?: string;
+  sanction_date?: string;
+  disbursal_date?: string;
+  transaction_date?: string;
 }
 
 interface Pagination {
@@ -98,6 +105,14 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
   const [loanNumber,  setLoanNumber]  = useState(initial?.loan_number  ?? '');
   const [loanTypeId,  setLoanTypeId]  = useState(String(initial?.loan_type_id ?? ''));
   const [cpId,        setCpId]        = useState(initial?.cp_id        ?? '');
+  
+  const [loanAmount,  setLoanAmount]  = useState(initial?.loan_amount  ?? '');
+  const [bankName,    setBankName]    = useState(initial?.bank_name    ?? '');
+  const [loginDate,   setLoginDate]   = useState(initial?.login_date   ? initial.login_date.split('T')[0] : '');
+  const [sanctionDate,setSanctionDate]= useState(initial?.sanction_date? initial.sanction_date.split('T')[0] : '');
+  const [disbursalDate,setDisbursalDate]=useState(initial?.disbursal_date? initial.disbursal_date.split('T')[0]: '');
+  const [transactionDate,setTransactionDate]=useState(initial?.transaction_date? initial.transaction_date.split('T')[0]: '');
+
   const [loading,     setLoading]     = useState(false);
 
   // Inline validation errors
@@ -108,6 +123,10 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
   const visibleStatuses = statuses.filter(s =>
     PROPERTY_ONLY.has(s.lead_status) ? PROPERTY_LOANS.has(selectedLoanTypeName) : true,
   );
+
+  const currentStatus = statuses.find(s => s.id === Number(statusId));
+  const stageOrder = currentStatus?.stage_order ?? 0;
+  const isCreated = stageOrder <= 1;
 
   function validatePhone(value: string) {
     if (!value)                    { setPhoneError('Mobile number is required.'); return false; }
@@ -136,8 +155,14 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
       phone,
       dob:          dob || null,
       status_id:    Number(statusId),
-      loan_number:  loanNumber || null,
+      loan_number:  isCreated ? null : (loanNumber || null),
       loan_type_id: Number(loanTypeId),
+      loan_amount:  loanAmount || null,
+      bank_name:    bankName || null,
+      login_date:   (stageOrder >= 2) ? (loginDate || null) : null,
+      sanction_date:(stageOrder >= 3) ? (sanctionDate || null) : null,
+      disbursal_date:(stageOrder >= 4) ? (disbursalDate || null) : null,
+      transaction_date: (PROPERTY_LOANS.has(selectedLoanTypeName) && stageOrder >= 6) ? (transactionDate || null) : null,
       ...(isAdmin && { cp_id: cpId || undefined }),
     };
 
@@ -153,7 +178,7 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
     setLoading(false);
 
     if (!res.ok) {
-      const d = await res.json();
+      const d = await res.json().catch(() => ({ error: 'Unknown error' }));
       toast(d.error ?? 'Failed to save lead.', 'error');
       return;
     }
@@ -218,16 +243,62 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
 
       <div className="form-row">
         <div className="field">
+          <label htmlFor="lf-loan-amount">Loan Amount</label>
+          <input id="lf-loan-amount" type="number" step="0.01" placeholder="500000" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="lf-bank">Bank <span className="req">*</span></label>
+          <select id="lf-bank" value={bankName} onChange={e => setBankName(e.target.value)} required>
+            <option value="">Select bank</option>
+            {BANK_NAMES.map(bank => <option key={bank} value={bank}>{bank}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="field" style={!isCreated ? { gridColumn: 'span 1' } : { gridColumn: 'span 2' }}>
           <label htmlFor="lf-status">Status <span className="req">*</span></label>
           <select id="lf-status" value={statusId} onChange={e => setStatusId(e.target.value)} required>
             <option value="">Select status</option>
             {visibleStatuses.map(s => <option key={s.id} value={s.id}>{s.lead_status}</option>)}
           </select>
         </div>
-        <div className="field">
-          <label htmlFor="lf-loan-num">Loan Number <span className="opt">(optional)</span></label>
-          <input id="lf-loan-num" type="text" placeholder="LN-00123" value={loanNumber} onChange={e => setLoanNumber(e.target.value)} />
-        </div>
+        {!isCreated && (
+          <div className="field">
+            <label htmlFor="lf-loan-num">Loan Number <span className="opt">(optional)</span></label>
+            <input id="lf-loan-num" type="text" placeholder="LN-00123" value={loanNumber} onChange={e => setLoanNumber(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      <div className="form-row">
+        {stageOrder >= 2 && (
+          <div className="field">
+            <label htmlFor="lf-login-date">Login Date</label>
+            <input id="lf-login-date" type="date" value={loginDate} onChange={e => setLoginDate(e.target.value)} />
+          </div>
+        )}
+        {stageOrder >= 3 && (
+          <div className="field">
+            <label htmlFor="lf-sanction-date">Sanction Date</label>
+            <input id="lf-sanction-date" type="date" value={sanctionDate} onChange={e => setSanctionDate(e.target.value)} />
+          </div>
+        )}
+      </div>
+
+      <div className="form-row">
+        {stageOrder >= 4 && (
+          <div className="field">
+            <label htmlFor="lf-disbursal-date">Disbursal Date</label>
+            <input id="lf-disbursal-date" type="date" value={disbursalDate} onChange={e => setDisbursalDate(e.target.value)} />
+          </div>
+        )}
+        {PROPERTY_LOANS.has(selectedLoanTypeName) && stageOrder >= 6 && (
+          <div className="field">
+            <label htmlFor="lf-transaction-date">Transaction Date</label>
+            <input id="lf-transaction-date" type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} />
+          </div>
+        )}
       </div>
 
       {isAdmin && (
@@ -283,7 +354,7 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
   // Load meta once
   useEffect(() => {
     Promise.all([
-      fetch('/api/meta').then(r => r.json()),
+      fetch('/api/meta').then(async r => { if (!r.ok) throw new Error(await r.text()); return r.json(); }),
       isAdmin ? fetch('/api/users/channel-partners').then(r => r.json()) : Promise.resolve([]),
     ]).then(([meta, cps]) => {
       setLoanTypes(meta.loanTypes);

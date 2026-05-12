@@ -12,11 +12,12 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id } = body;
+  const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id,
+          loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date } = body;
 
-  if (!full_name || !phone || !status_id || !loan_type_id) {
+  if (!full_name || !phone || !status_id || !loan_type_id || !bank_name) {
     return Response.json(
-      { error: 'full_name, phone, status_id and loan_type_id are required.' },
+      { error: 'full_name, phone, status_id, loan_type_id, and bank_name are required.' },
       { status: 400 }
     );
   }
@@ -42,7 +43,13 @@ export async function PATCH(
         status_id    = ${status_id},
         loan_number  = ${loan_number ?? null},
         loan_type_id = ${loan_type_id},
-        cp_id        = ${effectiveCpId}
+        cp_id        = ${effectiveCpId},
+        loan_amount  = ${loan_amount ?? null},
+        bank_name    = ${bank_name ?? null},
+        login_date   = ${login_date ?? null},
+        sanction_date= ${sanction_date ?? null},
+        disbursal_date=${disbursal_date ?? null},
+        transaction_date=${transaction_date ?? null}
     WHERE id = ${id}
     RETURNING *
   `;
