@@ -87,9 +87,17 @@ export async function POST(request: NextRequest) {
           loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date } =
     await request.json();
 
-  if (!full_name || !phone || !status_id || !loan_type_id || !bank_name) {
+  const missingFields: string[] = [];
+  if (!full_name)   missingFields.push('full_name');
+  if (!phone)       missingFields.push('phone');
+  if (!status_id)   missingFields.push('status_id');
+  if (!loan_type_id) missingFields.push('loan_type_id');
+  if (!loan_amount) missingFields.push('loan_amount');
+  if (!bank_name)   missingFields.push('bank_name');
+
+  if (missingFields.length) {
     return Response.json(
-      { error: 'full_name, phone, status_id, loan_type_id, and bank_name are required.' },
+      { error: `${missingFields.join(', ')} ${missingFields.length === 1 ? 'is' : 'are'} required.` },
       { status: 400 }
     );
   }

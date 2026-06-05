@@ -615,6 +615,8 @@ tbody td { padding: 13px 16px; color: var(--gray-700); vertical-align: middle; }
 }
 .toolbar-filters select:focus { border-color: var(--brand-primary); }
 
+#btn-add-lead { margin-left: auto; }
+
 /* ── Action Buttons ───────────────────────────────────────── */
 .action-btns { display: flex; align-items: center; gap: 4px; }
 .action-btn {

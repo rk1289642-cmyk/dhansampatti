@@ -118,6 +118,7 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
   // Inline validation errors
   const [phoneError, setPhoneError]   = useState('');
   const [dobError,   setDobError]     = useState('');
+  const [loanAmountError, setLoanAmountError] = useState('');
 
   const selectedLoanTypeName = loanTypes.find(l => l.id === Number(loanTypeId))?.loan_type ?? '';
   const visibleStatuses = statuses.filter(s =>
@@ -143,11 +144,25 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
     return true;
   }
 
+  function validateLoanAmount(value: string) {
+    if (!value.trim()) {
+      setLoanAmountError('Loan amount is required.');
+      return false;
+    }
+    if (Number.isNaN(Number(value)) || Number(value) <= 0) {
+      setLoanAmountError('Enter a valid loan amount.');
+      return false;
+    }
+    setLoanAmountError('');
+    return true;
+  }
+
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const phoneOk = validatePhone(phone);
-    const dobOk   = validateDob(dob);
-    if (!phoneOk || !dobOk) return;
+    const phoneOk      = validatePhone(phone);
+    const dobOk        = validateDob(dob);
+    const loanAmountOk = validateLoanAmount(loanAmount);
+    if (!phoneOk || !dobOk || !loanAmountOk) return;
     setLoading(true);
 
     const body = {
@@ -243,8 +258,21 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
 
       <div className="form-row">
         <div className="field">
-          <label htmlFor="lf-loan-amount">Loan Amount</label>
-          <input id="lf-loan-amount" type="number" step="0.01" placeholder="500000" value={loanAmount} onChange={e => setLoanAmount(e.target.value)} />
+          <label htmlFor="lf-loan-amount">Loan Amount <span className="req">*</span></label>
+          <input
+            id="lf-loan-amount"
+            type="number"
+            step="0.01"
+            placeholder="500000"
+            value={loanAmount}
+            onChange={e => {
+              setLoanAmount(e.target.value);
+              if (loanAmountError) validateLoanAmount(e.target.value);
+            }}
+            onBlur={() => validateLoanAmount(loanAmount)}
+            required
+          />
+          {loanAmountError && <span className="field-error">{loanAmountError}</span>}
         </div>
         <div className="field">
           <label htmlFor="lf-bank">Bank <span className="req">*</span></label>

@@ -11,50 +11,107 @@ export async function PATCH(
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { id } = await params;
-  const body = await request.json();
-  const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id,
-          loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date } = body;
+  try {
+    const body = await request.json();
+    const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id,
+            loan_amount, bank_name, remark, login_date, sanction_date, disbursal_date, transaction_date } = body;
 
-  if (!full_name || !phone || !status_id || !loan_type_id || !bank_name) {
-    return Response.json(
-      { error: 'full_name, phone, status_id, loan_type_id, and bank_name are required.' },
-      { status: 400 }
-    );
+    const missingFields: string[] = [];
+    if (!full_name)    missingFields.push('full_name');
+    if (!phone)        missingFields.push('phone');
+    if (!status_id)    missingFields.push('status_id');
+    if (!loan_type_id) missingFields.push('loan_type_id');
+    if (!loan_amount)  missingFields.push('loan_amount');
+    if (!bank_name)    missingFields.push('bank_name');
+
+    if (missingFields.length) {
+      return Response.json(
+        { error: `${missingFields.join(', ')} ${missingFields.length === 1 ? 'is' : 'are'} required.` },
+        { status: 400 }
+      );
+    }
+
+    if (Number.isNaN(Number(loan_amount)) || Number(loan_amount) <= 0) {
+      return Response.json({ error: 'loan_amount must be a valid positive number.' }, { status: 400 });
+    }
+
+    // Cast numeric fields and validate
+    const statusIdNum = Number(status_id);
+    const loanTypeIdNum = Number(loan_type_id);
+    if (Number.isNaN(statusIdNum) || Number.isNaN(loanTypeIdNum)) {
+      return Response.json({ error: 'status_id and loan_type_id must be valid numbers.' }, { status: 400 });
+    }
+
+    // Channel partners can only edit their own leads
+    const ownershipCheck =
+      session.role === 'channel_partner'
+        ? await sql`SELECT id FROM leads WHERE id = ${id} AND cp_id = ${session.userId}`
+        : await sql`SELECT id FROM leads WHERE id = ${id}`;
+
+    if (!ownershipCheck.length) {
+      return Response.json({ error: 'Lead not found or access denied.' }, { status: 404 });
+    }
+
+    const effectiveCpId =
+      session.role === 'admin' ? (cp_id || session.userId) : session.userId;
+    // Only update 'remark' if column exists to remain compatible with older DBs
+    const colCheck = await sql`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'leads' AND column_name = 'remark' AND table_schema = 'public'
+    `;
+    const hasRemark = (colCheck && colCheck.length > 0);
+
+    let rows;
+    if (hasRemark) {
+      rows = await sql`
+        UPDATE leads
+        SET full_name    = ${full_name},
+            phone        = ${phone},
+            dob          = ${dob ?? null},
+            status_id    = ${statusIdNum},
+            loan_number  = ${loan_number ?? null},
+            loan_type_id = ${loanTypeIdNum},
+            cp_id        = ${effectiveCpId},
+            loan_amount  = ${loan_amount ?? null},
+            bank_name    = ${bank_name ?? null},
+            remark       = ${remark ?? null},
+            login_date   = ${login_date ?? null},
+            sanction_date= ${sanction_date ?? null},
+            disbursal_date=${disbursal_date ?? null},
+            transaction_date=${transaction_date ?? null}
+        WHERE id = ${id}
+        RETURNING *
+      `;
+    } else {
+      rows = await sql`
+        UPDATE leads
+        SET full_name    = ${full_name},
+            phone        = ${phone},
+            dob          = ${dob ?? null},
+            status_id    = ${statusIdNum},
+            loan_number  = ${loan_number ?? null},
+            loan_type_id = ${loanTypeIdNum},
+            cp_id        = ${effectiveCpId},
+            loan_amount  = ${loan_amount ?? null},
+            bank_name    = ${bank_name ?? null},
+            login_date   = ${login_date ?? null},
+            sanction_date= ${sanction_date ?? null},
+            disbursal_date=${disbursal_date ?? null},
+            transaction_date=${transaction_date ?? null}
+        WHERE id = ${id}
+        RETURNING *
+      `;
+    }
+
+    return Response.json(rows[0]);
+  } catch (err: any) {
+    console.error('API Error /api/leads/[id] PATCH:', err);
+    // Handle unique constraint violation for phone
+    if (err && (err.code === '23505' || String(err.message).includes('leads_phone_key'))) {
+      return Response.json({ error: 'Phone number already exists.' }, { status: 409 });
+    }
+    return Response.json({ error: err?.message ?? 'Internal server error' }, { status: 500 });
   }
-
-  // Channel partners can only edit their own leads
-  const ownershipCheck =
-    session.role === 'channel_partner'
-      ? await sql`SELECT id FROM leads WHERE id = ${id} AND cp_id = ${session.userId}`
-      : await sql`SELECT id FROM leads WHERE id = ${id}`;
-
-  if (!ownershipCheck.length) {
-    return Response.json({ error: 'Lead not found or access denied.' }, { status: 404 });
-  }
-
-  const effectiveCpId =
-    session.role === 'admin' ? (cp_id ?? session.userId) : session.userId;
-
-  const rows = await sql`
-    UPDATE leads
-    SET full_name    = ${full_name},
-        phone        = ${phone},
-        dob          = ${dob ?? null},
-        status_id    = ${status_id},
-        loan_number  = ${loan_number ?? null},
-        loan_type_id = ${loan_type_id},
-        cp_id        = ${effectiveCpId},
-        loan_amount  = ${loan_amount ?? null},
-        bank_name    = ${bank_name ?? null},
-        login_date   = ${login_date ?? null},
-        sanction_date= ${sanction_date ?? null},
-        disbursal_date=${disbursal_date ?? null},
-        transaction_date=${transaction_date ?? null}
-    WHERE id = ${id}
-    RETURNING *
-  `;
-
-  return Response.json(rows[0]);
 }
 
 // DELETE /api/leads/[id] — admin only (or CP deleting own lead)
