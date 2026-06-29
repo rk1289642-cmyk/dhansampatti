@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
         SELECT l.id, l.full_name, l.phone, l.dob, l.loan_number, l.created_at, l.updated_at,
                l.status_id, l.loan_type_id, l.cp_id, l.loan_amount, l.bank_name,
                l.login_date, l.sanction_date, l.disbursal_date, l.transaction_date,
+               l.company, l.occupation, l.salary, l.turnover, l.location,
                ls.lead_status, lt.loan_type, u.name AS cp_name
         FROM leads l
         JOIN lead_statuses ls ON ls.id = l.status_id
@@ -83,17 +84,19 @@ export async function POST(request: NextRequest) {
   const session = await getSession();
   if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const { full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id,
-          loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date } =
-    await request.json();
+  const {
+    full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id,
+    loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date,
+    company, occupation, salary, turnover, location,
+  } = await request.json();
 
   const missingFields: string[] = [];
-  if (!full_name)   missingFields.push('full_name');
-  if (!phone)       missingFields.push('phone');
-  if (!status_id)   missingFields.push('status_id');
+  if (!full_name)    missingFields.push('full_name');
+  if (!phone)        missingFields.push('phone');
+  if (!status_id)    missingFields.push('status_id');
   if (!loan_type_id) missingFields.push('loan_type_id');
-  if (!loan_amount) missingFields.push('loan_amount');
-  if (!bank_name)   missingFields.push('bank_name');
+  if (!loan_amount)  missingFields.push('loan_amount');
+  if (!bank_name)    missingFields.push('bank_name');
 
   if (missingFields.length) {
     return Response.json(
@@ -106,12 +109,19 @@ export async function POST(request: NextRequest) {
   const effectiveCpId = session.role === 'admin' ? (cp_id ?? session.userId) : session.userId;
 
   const rows = await sql`
-    INSERT INTO leads (full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id, created_by,
-                       loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date)
-    VALUES (${full_name}, ${phone}, ${dob ?? null}, ${status_id}, ${loan_number ?? null},
-            ${loan_type_id}, ${effectiveCpId}, ${session.userId},
-            ${loan_amount ?? null}, ${bank_name ?? null}, ${login_date ?? null}, 
-            ${sanction_date ?? null}, ${disbursal_date ?? null}, ${transaction_date ?? null})
+    INSERT INTO leads (
+      full_name, phone, dob, status_id, loan_number, loan_type_id, cp_id, created_by,
+      loan_amount, bank_name, login_date, sanction_date, disbursal_date, transaction_date,
+      company, occupation, salary, turnover, location
+    )
+    VALUES (
+      ${full_name}, ${phone}, ${dob ?? null}, ${status_id}, ${loan_number ?? null},
+      ${loan_type_id}, ${effectiveCpId}, ${session.userId},
+      ${loan_amount ?? null}, ${bank_name ?? null}, ${login_date ?? null},
+      ${sanction_date ?? null}, ${disbursal_date ?? null}, ${transaction_date ?? null},
+      ${company ?? null}, ${occupation ?? null}, ${salary ?? null},
+      ${turnover ?? null}, ${location ?? null}
+    )
     RETURNING *
   `;
 

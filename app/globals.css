@@ -663,6 +663,18 @@ tbody td { padding: 13px 16px; color: var(--gray-700); vertical-align: middle; }
   padding: 5px 8px;
 }
 
+/* ── Form Section Label (groups fields within a modal form) ── */
+.form-section-label {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--gray-400);
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--gray-100);
+}
+
 /* ── Logout Confirmation Popup ────────────────────────────── */
 .logout-overlay {
   position: fixed;

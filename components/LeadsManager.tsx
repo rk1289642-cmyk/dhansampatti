@@ -30,6 +30,11 @@ interface Lead {
   sanction_date?: string;
   disbursal_date?: string;
   transaction_date?: string;
+  company?: string;
+  occupation?: string;
+  salary?: string;
+  turnover?: string;
+  location?: string;
 }
 
 interface Pagination {
@@ -105,13 +110,20 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
   const [loanNumber,  setLoanNumber]  = useState(initial?.loan_number  ?? '');
   const [loanTypeId,  setLoanTypeId]  = useState(String(initial?.loan_type_id ?? ''));
   const [cpId,        setCpId]        = useState(initial?.cp_id        ?? '');
-  
+
   const [loanAmount,  setLoanAmount]  = useState(initial?.loan_amount  ?? '');
   const [bankName,    setBankName]    = useState(initial?.bank_name    ?? '');
   const [loginDate,   setLoginDate]   = useState(initial?.login_date   ? initial.login_date.split('T')[0] : '');
   const [sanctionDate,setSanctionDate]= useState(initial?.sanction_date? initial.sanction_date.split('T')[0] : '');
   const [disbursalDate,setDisbursalDate]=useState(initial?.disbursal_date? initial.disbursal_date.split('T')[0]: '');
   const [transactionDate,setTransactionDate]=useState(initial?.transaction_date? initial.transaction_date.split('T')[0]: '');
+
+  // New fields
+  const [company,     setCompany]     = useState(initial?.company    ?? '');
+  const [occupation,  setOccupation]  = useState(initial?.occupation ?? '');
+  const [salary,      setSalary]      = useState(initial?.salary     ?? '');
+  const [turnover,    setTurnover]    = useState(initial?.turnover   ?? '');
+  const [location,    setLocation]    = useState(initial?.location   ?? '');
 
   const [loading,     setLoading]     = useState(false);
 
@@ -178,6 +190,11 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
       sanction_date:(stageOrder >= 3) ? (sanctionDate || null) : null,
       disbursal_date:(stageOrder >= 4) ? (disbursalDate || null) : null,
       transaction_date: (PROPERTY_LOANS.has(selectedLoanTypeName) && stageOrder >= 6) ? (transactionDate || null) : null,
+      company:    company    || null,
+      occupation: occupation || null,
+      salary:     occupation === 'salaried'      ? (salary   || null) : null,
+      turnover:   occupation === 'self_employed' ? (turnover || null) : null,
+      location:   location   || null,
       ...(isAdmin && { cp_id: cpId || undefined }),
     };
 
@@ -327,6 +344,42 @@ function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSu
             <input id="lf-transaction-date" type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} />
           </div>
         )}
+      </div>
+
+      {/* ── Applicant Profile ── */}
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="lf-company">Company / Employer</label>
+          <input id="lf-company" type="text" placeholder="ABC Pvt Ltd" value={company} onChange={e => setCompany(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="lf-location">Location</label>
+          <input id="lf-location" type="text" placeholder="Mumbai, Maharashtra" value={location} onChange={e => setLocation(e.target.value)} />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="lf-occupation">Occupation</label>
+          <select id="lf-occupation" value={occupation} onChange={e => { setOccupation(e.target.value); setSalary(''); setTurnover(''); }}>
+            <option value="">Select occupation</option>
+            <option value="salaried">Salaried</option>
+            <option value="self_employed">Self Employed</option>
+          </select>
+        </div>
+        {occupation === 'salaried' && (
+          <div className="field">
+            <label htmlFor="lf-salary">Monthly Salary (₹)</label>
+            <input id="lf-salary" type="number" step="0.01" placeholder="50000" value={salary} onChange={e => setSalary(e.target.value)} />
+          </div>
+        )}
+        {occupation === 'self_employed' && (
+          <div className="field">
+            <label htmlFor="lf-turnover">Annual Turnover (₹)</label>
+            <input id="lf-turnover" type="number" step="0.01" placeholder="1200000" value={turnover} onChange={e => setTurnover(e.target.value)} />
+          </div>
+        )}
+        {!occupation && <div className="field" />}
       </div>
 
       {isAdmin && (
