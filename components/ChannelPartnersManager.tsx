@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, FormEvent } from 'react';
 import Modal from '@/components/Modal';
 import { toast } from '@/components/ToastContainer';
+import { BANK_NAMES } from '@/lib/constants';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -14,8 +15,36 @@ interface ChannelPartner {
   address: string | null;
   cp_email: string | null;
   pan_card: string | null;
+  mobile_no: string | null;
+  dob: string | null;
+  aadhar_no: string | null;
+  bank_name: string | null;
+  account_no: string | null;
+  ifsc_code: string | null;
+  office_address: string | null;
+  pin_code: string | null;
   lead_count: string;
   created_at: string;
+}
+
+// ── Validation helpers ────────────────────────────────────────
+
+const PAN_REGEX   = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+const IFSC_REGEX  = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+function isValidIndianMobile(v: string) { return /^[6-9]\d{9}$/.test(v.trim()); }
+
+function maxDobDate(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return d.toISOString().split('T')[0];
+}
+
+function isAtLeast18(dateStr: string): boolean {
+  if (!dateStr) return true;
+  const cutoff = new Date();
+  cutoff.setFullYear(cutoff.getFullYear() - 18);
+  return new Date(dateStr) <= cutoff;
 }
 
 // ── Partner Form ──────────────────────────────────────────────
@@ -26,51 +55,112 @@ interface PartnerFormProps {
   onClose: () => void;
 }
 
-// PAN format: 5 uppercase letters + 4 digits + 1 uppercase letter
-const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
-
 function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
   const isEdit = Boolean(initial?.id);
 
-  const [name,      setName]      = useState(initial?.name      ?? '');
-  const [email,     setEmail]     = useState(initial?.email     ?? '');
-  const [password,  setPassword]  = useState('');
-  const [address,   setAddress]   = useState(initial?.address   ?? '');
-  const [gender,    setGender]    = useState(initial?.gender    ?? '');
-  const [cpEmail,   setCpEmail]   = useState(initial?.cp_email  ?? '');
-  const [panCard,   setPanCard]   = useState(initial?.pan_card  ?? '');
+  // Basic info
+  const [name,          setName]          = useState(initial?.name           ?? '');
+  const [email,         setEmail]         = useState(initial?.email          ?? '');
+  const [password,      setPassword]      = useState('');
+  const [address,       setAddress]       = useState(initial?.address        ?? '');
+  const [gender,        setGender]        = useState(initial?.gender         ?? '');
+  const [cpEmail,       setCpEmail]       = useState(initial?.cp_email       ?? '');
+
+  // KYC & banking
+  const [mobileNo,      setMobileNo]      = useState(initial?.mobile_no      ?? '');
+  const [panCard,       setPanCard]       = useState(initial?.pan_card       ?? '');
+  const [dob,           setDob]           = useState(initial?.dob ? initial.dob.split('T')[0] : '');
+  const [aadharNo,      setAadharNo]      = useState(initial?.aadhar_no      ?? '');
+  const [bankName,      setBankName]      = useState(initial?.bank_name      ?? '');
+  const [accountNo,     setAccountNo]     = useState(initial?.account_no     ?? '');
+  const [ifscCode,      setIfscCode]      = useState(initial?.ifsc_code      ?? '');
+  const [officeAddress, setOfficeAddress] = useState(initial?.office_address ?? '');
+  const [pinCode,       setPinCode]       = useState(initial?.pin_code       ?? '');
+
   const [loading,   setLoading]   = useState(false);
   const [showPass,  setShowPass]  = useState(false);
 
-  // PAN validation
+  // Inline errors
+  const [mobileError, setMobileError] = useState('');
+  const [dobError,    setDobError]    = useState('');
+  const [ifscError,   setIfscError]   = useState('');
+  const [pinError,    setPinError]    = useState('');
+  const [aadharError, setAadharError] = useState('');
+
+  // PAN
   const panFilled  = panCard.trim().length > 0;
   const panInvalid = panFilled && !PAN_REGEX.test(panCard);
+
+  function validateMobile(v: string) {
+    if (!v) { setMobileError(''); return true; }
+    if (!/^\d+$/.test(v)) { setMobileError('Only digits allowed.'); return false; }
+    if (!isValidIndianMobile(v)) { setMobileError('Enter a valid 10-digit number (starts 6–9).'); return false; }
+    setMobileError(''); return true;
+  }
+
+  function validateDob(v: string) {
+    if (!v) { setDobError(''); return true; }
+    if (!isAtLeast18(v)) { setDobError('Must be at least 18 years old.'); return false; }
+    setDobError(''); return true;
+  }
+
+  function validateIfsc(v: string) {
+    if (!v) { setIfscError(''); return true; }
+    if (!IFSC_REGEX.test(v.toUpperCase())) { setIfscError('Invalid IFSC (e.g. SBIN0001234).'); return false; }
+    setIfscError(''); return true;
+  }
+
+  function validatePin(v: string) {
+    if (!v) { setPinError(''); return true; }
+    if (!/^\d{6}$/.test(v)) { setPinError('PIN code must be exactly 6 digits.'); return false; }
+    setPinError(''); return true;
+  }
+
+  function validateAadhar(v: string) {
+    if (!v) { setAadharError(''); return true; }
+    if (!/^\d{12}$/.test(v)) { setAadharError('Aadhaar must be exactly 12 digits.'); return false; }
+    setAadharError(''); return true;
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
 
-    if (panInvalid) {
-      toast('Please enter a valid PAN card number (e.g. ABCDE1234F).', 'error');
+    const mobileOk = validateMobile(mobileNo);
+    const dobOk    = validateDob(dob);
+    const ifscOk   = validateIfsc(ifscCode);
+    const pinOk    = validatePin(pinCode);
+    const aadharOk = validateAadhar(aadharNo);
+    if (panInvalid || !mobileOk || !dobOk || !ifscOk || !pinOk || !aadharOk) {
+      toast('Please fix the validation errors before submitting.', 'error');
+      return;
+    }
+
+    if (!isEdit && !password) {
+      toast('Password is required for new channel partners.', 'error');
       return;
     }
 
     setLoading(true);
 
     const body: Record<string, string | null> = {
-      name, email, address: address || null,
-      gender: gender || null, cp_email: cpEmail || null,
-      pan_card: panCard.trim() || null,
+      name, email,
+      address:        address        || null,
+      gender:         gender         || null,
+      cp_email:       cpEmail        || null,
+      pan_card:       panCard.trim() || null,
+      mobile_no:      mobileNo       || null,
+      dob:            dob            || null,
+      aadhar_no:      aadharNo       || null,
+      bank_name:      bankName       || null,
+      account_no:     accountNo      || null,
+      ifsc_code:      ifscCode.toUpperCase() || null,
+      office_address: officeAddress  || null,
+      pin_code:       pinCode        || null,
     };
     if (password) body.password = password;
 
     const url    = isEdit ? `/api/users/channel-partners/${initial!.id}` : '/api/users/channel-partners';
     const method = isEdit ? 'PATCH' : 'POST';
-
-    if (!isEdit && !password) {
-      toast('Password is required for new channel partners.', 'error');
-      setLoading(false);
-      return;
-    }
 
     const res = await fetch(url, {
       method,
@@ -93,13 +183,17 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
 
   return (
     <form onSubmit={handleSubmit} noValidate>
+
+      {/* ── Section: Basic Info ── */}
+      <div className="form-section-label">Basic Information</div>
+
       <div className="form-row">
         <div className="field">
           <label htmlFor="pf-name">Full Name <span className="req">*</span></label>
           <input id="pf-name" type="text" placeholder="Priya Sharma" value={name} onChange={e => setName(e.target.value)} required />
         </div>
         <div className="field">
-          <label htmlFor="pf-email">Email <span className="req">*</span></label>
+          <label htmlFor="pf-email">Login Email <span className="req">*</span></label>
           <input id="pf-email" type="email" placeholder="priya@example.com" value={email} onChange={e => setEmail(e.target.value)} required />
         </div>
       </div>
@@ -144,20 +238,42 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
         </div>
       </div>
 
-      <div className="field">
-        <label htmlFor="pf-address">Address</label>
-        <input id="pf-address" type="text" placeholder="123 MG Road, Bengaluru" value={address} onChange={e => setAddress(e.target.value)} />
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="pf-mobile">Mobile No.</label>
+          <input
+            id="pf-mobile"
+            type="tel"
+            inputMode="numeric"
+            placeholder="9876543210"
+            maxLength={10}
+            value={mobileNo}
+            onChange={e => { const v = e.target.value.replace(/\D/g, ''); setMobileNo(v); if (mobileError) validateMobile(v); }}
+            onBlur={() => validateMobile(mobileNo)}
+          />
+          {mobileError && <span className="field-error">{mobileError}</span>}
+        </div>
+        <div className="field">
+          <label htmlFor="pf-dob">Date of Birth <span className="opt">(18+ required)</span></label>
+          <input
+            id="pf-dob"
+            type="date"
+            max={maxDobDate()}
+            value={dob}
+            onChange={e => { setDob(e.target.value); if (dobError) validateDob(e.target.value); }}
+            onBlur={() => validateDob(dob)}
+          />
+          {dobError && <span className="field-error">{dobError}</span>}
+        </div>
       </div>
+
+      {/* ── Section: KYC ── */}
+      <div className="form-section-label" style={{ marginTop: 8 }}>KYC Details</div>
 
       <div className="form-row">
         <div className="field">
-          <label htmlFor="pf-cp-email">Office Email <span className="opt">(optional)</span></label>
-          <input id="pf-cp-email" type="email" placeholder="office@firm.com" value={cpEmail} onChange={e => setCpEmail(e.target.value)} />
-        </div>
-        <div className="field">
           <label htmlFor="pf-pan">
-            PAN Card
-            <span className="opt"> — format: AAAAA9999A</span>
+            PAN Card <span className="opt">— format: AAAAA9999A</span>
           </label>
           <input
             id="pf-pan"
@@ -172,8 +288,7 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
             <div className="pan-warning">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                <line x1="12" y1="9" x2="12" y2="13"/>
-                <line x1="12" y1="17" x2="12.01" y2="17"/>
+                <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
               </svg>
               Invalid format. Must be 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F).
             </div>
@@ -187,6 +302,94 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
             </div>
           )}
         </div>
+        <div className="field">
+          <label htmlFor="pf-aadhar">Aadhaar No. <span className="opt">(12 digits)</span></label>
+          <input
+            id="pf-aadhar"
+            type="text"
+            inputMode="numeric"
+            placeholder="1234 5678 9012"
+            maxLength={12}
+            value={aadharNo}
+            onChange={e => { const v = e.target.value.replace(/\D/g, ''); setAadharNo(v); if (aadharError) validateAadhar(v); }}
+            onBlur={() => validateAadhar(aadharNo)}
+          />
+          {aadharError && <span className="field-error">{aadharError}</span>}
+        </div>
+      </div>
+
+      {/* ── Section: Banking ── */}
+      <div className="form-section-label" style={{ marginTop: 8 }}>Bank Details</div>
+
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="pf-bank">Bank Name</label>
+          <select id="pf-bank" value={bankName} onChange={e => setBankName(e.target.value)}>
+            <option value="">Select bank</option>
+            {BANK_NAMES.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="pf-account">Account No.</label>
+          <input
+            id="pf-account"
+            type="text"
+            inputMode="numeric"
+            placeholder="0123456789"
+            maxLength={18}
+            value={accountNo}
+            onChange={e => setAccountNo(e.target.value.replace(/\D/g, ''))}
+          />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="pf-ifsc">IFSC Code</label>
+          <input
+            id="pf-ifsc"
+            type="text"
+            placeholder="SBIN0001234"
+            maxLength={11}
+            value={ifscCode}
+            onChange={e => { const v = e.target.value.toUpperCase(); setIfscCode(v); if (ifscError) validateIfsc(v); }}
+            onBlur={() => validateIfsc(ifscCode)}
+          />
+          {ifscError && <span className="field-error">{ifscError}</span>}
+        </div>
+        <div className="field">
+          <label htmlFor="pf-cp-email">Office Email <span className="opt">(optional)</span></label>
+          <input id="pf-cp-email" type="email" placeholder="office@firm.com" value={cpEmail} onChange={e => setCpEmail(e.target.value)} />
+        </div>
+      </div>
+
+      {/* ── Section: Address ── */}
+      <div className="form-section-label" style={{ marginTop: 8 }}>Address Details</div>
+
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="pf-office-address">Office Address</label>
+          <input id="pf-office-address" type="text" placeholder="Shop No. 5, MG Road, Bengaluru" value={officeAddress} onChange={e => setOfficeAddress(e.target.value)} />
+        </div>
+        <div className="field">
+          <label htmlFor="pf-pin">PIN Code</label>
+          <input
+            id="pf-pin"
+            type="text"
+            inputMode="numeric"
+            placeholder="560001"
+            maxLength={6}
+            value={pinCode}
+            onChange={e => { const v = e.target.value.replace(/\D/g, ''); setPinCode(v); if (pinError) validatePin(v); }}
+            onBlur={() => validatePin(pinCode)}
+          />
+          {pinError && <span className="field-error">{pinError}</span>}
+        </div>
+      </div>
+
+      <div className="field">
+        <label htmlFor="pf-address">Residential Address</label>
+        <input id="pf-address" type="text" placeholder="123 MG Road, Bengaluru" value={address} onChange={e => setAddress(e.target.value)} />
       </div>
 
       <div className="modal-actions">
@@ -202,12 +405,12 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
 // ── Main Channel Partners Manager ─────────────────────────────
 
 export default function ChannelPartnersManager() {
-  const [partners,     setPartners]     = useState<ChannelPartner[]>([]);
-  const [fetching,     setFetching]     = useState(true);
-  const [addOpen,      setAddOpen]      = useState(false);
-  const [editPartner,  setEditPartner]  = useState<ChannelPartner | null>(null);
-  const [deletePartner,setDeletePartner]= useState<ChannelPartner | null>(null);
-  const [deleting,     setDeleting]     = useState(false);
+  const [partners,      setPartners]      = useState<ChannelPartner[]>([]);
+  const [fetching,      setFetching]      = useState(true);
+  const [addOpen,       setAddOpen]       = useState(false);
+  const [editPartner,   setEditPartner]   = useState<ChannelPartner | null>(null);
+  const [deletePartner, setDeletePartner] = useState<ChannelPartner | null>(null);
+  const [deleting,      setDeleting]      = useState(false);
 
   const fetchPartners = useCallback(async () => {
     setFetching(true);
@@ -276,7 +479,7 @@ export default function ChannelPartnersManager() {
           <table>
             <thead>
               <tr>
-                <th>Name</th><th>Email</th><th>Gender</th>
+                <th>Name</th><th>Email</th><th>Mobile</th><th>Gender</th>
                 <th>Office Email</th><th>PAN Card</th><th>Leads</th>
                 <th>Joined</th><th>Actions</th>
               </tr>
@@ -286,6 +489,7 @@ export default function ChannelPartnersManager() {
                 <tr key={p.id}>
                   <td style={{ fontWeight: 500, color: 'var(--gray-900)' }}>{p.name}</td>
                   <td>{p.email}</td>
+                  <td>{p.mobile_no ?? '—'}</td>
                   <td style={{ textTransform: 'capitalize' }}>{p.gender ?? '—'}</td>
                   <td style={{ color: 'var(--gray-500)' }}>{p.cp_email ?? '—'}</td>
                   <td><span className="badge badge-gray">{p.pan_card ?? '—'}</span></td>
@@ -337,14 +541,15 @@ export default function ChannelPartnersManager() {
                 <div className="lead-card-top">
                   <div>
                     <div className="lead-card-name">{p.name}</div>
-                    <div className="lead-card-phone">{p.email}</div>
+                    <div className="lead-card-phone">{p.mobile_no ?? p.email}</div>
                   </div>
                   <span className="badge badge-blue">{p.lead_count} leads</span>
                 </div>
                 <div className="lead-card-meta">
-                  {p.pan_card && <span className="lead-card-tag">{p.pan_card}</span>}
-                  {p.gender && <span className="lead-card-tag muted" style={{ textTransform: 'capitalize' }}>{p.gender}</span>}
-                  {p.cp_email && <span className="lead-card-tag muted">{p.cp_email}</span>}
+                  {p.pan_card    && <span className="lead-card-tag">{p.pan_card}</span>}
+                  {p.bank_name   && <span className="lead-card-tag muted">{p.bank_name}</span>}
+                  {p.gender      && <span className="lead-card-tag muted" style={{ textTransform: 'capitalize' }}>{p.gender}</span>}
+                  {p.cp_email    && <span className="lead-card-tag muted">{p.cp_email}</span>}
                 </div>
                 <div className="lead-card-footer">
                   <span className="lead-card-date">
@@ -366,12 +571,12 @@ export default function ChannelPartnersManager() {
       </div>
 
       {/* Add Modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Channel Partner" width={580}>
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Channel Partner" width={620}>
         <PartnerForm onSuccess={fetchPartners} onClose={() => setAddOpen(false)} />
       </Modal>
 
       {/* Edit Modal */}
-      <Modal open={Boolean(editPartner)} onClose={() => setEditPartner(null)} title="Edit Channel Partner" width={580}>
+      <Modal open={Boolean(editPartner)} onClose={() => setEditPartner(null)} title="Edit Channel Partner" width={620}>
         {editPartner && (
           <PartnerForm initial={editPartner} onSuccess={fetchPartners} onClose={() => setEditPartner(null)} />
         )}

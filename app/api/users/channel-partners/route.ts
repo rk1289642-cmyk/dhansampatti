@@ -11,7 +11,9 @@ export async function GET() {
   }
 
   const rows = await sql`
-    SELECT u.id, u.name, u.email, u.address, u.gender, u.cp_email, u.pan_card, u.created_at,
+    SELECT u.id, u.name, u.email, u.address, u.gender, u.cp_email, u.pan_card,
+           u.mobile_no, u.dob, u.aadhar_no, u.bank_name, u.account_no,
+           u.ifsc_code, u.office_address, u.pin_code, u.created_at,
            COUNT(l.id)::text AS lead_count
     FROM users u
     JOIN roles r ON r.id = u.role_id
@@ -31,7 +33,11 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Forbidden' }, { status: 403 });
   }
 
-  const { name, email, password, address, gender, cp_email, pan_card } = await request.json();
+  const {
+    name, email, password, address, gender, cp_email, pan_card,
+    mobile_no, dob, aadhar_no, bank_name, account_no,
+    ifsc_code, office_address, pin_code,
+  } = await request.json();
 
   if (!name || !email || !password) {
     return Response.json({ error: 'Name, email and password are required.' }, { status: 400 });
@@ -43,9 +49,16 @@ export async function POST(request: NextRequest) {
   const hash = await bcrypt.hash(password, 12);
 
   const rows = await sql`
-    INSERT INTO users (name, email, password_hash, address, gender, cp_email, pan_card, role_id)
-    VALUES (${name}, ${email.toLowerCase().trim()}, ${hash}, ${address ?? null},
-            ${gender ?? null}, ${cp_email ?? null}, ${pan_card ?? null}, ${roleId})
+    INSERT INTO users (
+      name, email, password_hash, address, gender, cp_email, pan_card, role_id,
+      mobile_no, dob, aadhar_no, bank_name, account_no, ifsc_code, office_address, pin_code
+    )
+    VALUES (
+      ${name}, ${email.toLowerCase().trim()}, ${hash},
+      ${address ?? null}, ${gender ?? null}, ${cp_email ?? null}, ${pan_card ?? null}, ${roleId},
+      ${mobile_no ?? null}, ${dob ?? null}, ${aadhar_no ?? null}, ${bank_name ?? null},
+      ${account_no ?? null}, ${ifsc_code ?? null}, ${office_address ?? null}, ${pin_code ?? null}
+    )
     RETURNING id, name, email
   `;
 

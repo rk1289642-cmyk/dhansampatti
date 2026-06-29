@@ -14,34 +14,44 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  const { name, email, password, address, gender, cp_email, pan_card } = await request.json();
+  const {
+    name, email, password, address, gender, cp_email, pan_card,
+    mobile_no, dob, aadhar_no, bank_name, account_no,
+    ifsc_code, office_address, pin_code,
+  } = await request.json();
 
   if (!name || !email) {
     return Response.json({ error: 'Name and email are required.' }, { status: 400 });
   }
 
-  // Only update password_hash if a new password was provided
+  const commonFields = sql`
+    name          = ${name},
+    email         = ${email.toLowerCase().trim()},
+    address       = ${address ?? null},
+    gender        = ${gender ?? null},
+    cp_email      = ${cp_email ?? null},
+    pan_card      = ${pan_card ?? null},
+    mobile_no     = ${mobile_no ?? null},
+    dob           = ${dob ?? null},
+    aadhar_no     = ${aadhar_no ?? null},
+    bank_name     = ${bank_name ?? null},
+    account_no    = ${account_no ?? null},
+    ifsc_code     = ${ifsc_code ?? null},
+    office_address= ${office_address ?? null},
+    pin_code      = ${pin_code ?? null}
+  `;
+
   const rows = password
     ? await sql`
         UPDATE users
-        SET name          = ${name},
-            email         = ${email.toLowerCase().trim()},
-            password_hash = ${await bcrypt.hash(password, 12)},
-            address       = ${address ?? null},
-            gender        = ${gender ?? null},
-            cp_email      = ${cp_email ?? null},
-            pan_card      = ${pan_card ?? null}
+        SET ${commonFields},
+            password_hash = ${await bcrypt.hash(password, 12)}
         WHERE id = ${id}
         RETURNING id, name, email
       `
     : await sql`
         UPDATE users
-        SET name     = ${name},
-            email    = ${email.toLowerCase().trim()},
-            address  = ${address ?? null},
-            gender   = ${gender ?? null},
-            cp_email = ${cp_email ?? null},
-            pan_card = ${pan_card ?? null}
+        SET ${commonFields}
         WHERE id = ${id}
         RETURNING id, name, email
       `;
