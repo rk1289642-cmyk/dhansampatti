@@ -103,7 +103,7 @@ export default async function AdminDashboard() {
               </svg>
             </div>
             <div>
-              <div className="ql-title">Manage Leads</div>
+              <div className="ql-title">Leads</div>
               <div className="ql-sub">Add, edit, search and filter all leads across all partners</div>
             </div>
             <svg className="ql-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
