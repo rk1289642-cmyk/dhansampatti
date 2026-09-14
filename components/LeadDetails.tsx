@@ -13,7 +13,6 @@ interface Comment {
   id: number;
   comment_text: string;
   user_name: string;
-  old_status_name?: string;
   new_status_name?: string;
   created_at: string;
 }
@@ -355,11 +354,10 @@ export default function LeadDetails({ isAdmin, leadId }: LeadDetailsProps) {
                       {c.comment_text}
                     </div>
                   )}
-                  {c.old_status_name && c.new_status_name && c.old_status_name !== c.new_status_name && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem' }}>
-                       <span style={{ color: 'var(--gray-500)' }}>{c.old_status_name}</span>
-                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: 'var(--gray-400)' }}><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
-                       <span style={{ color: 'var(--gray-900)', fontWeight: 500 }}>{c.new_status_name}</span>
+                  {c.new_status_name && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', marginTop: c.comment_text ? '8px' : '0' }}>
+                       <span style={{ color: 'var(--gray-500)' }}>Status updated to</span>
+                       <span style={{ color: 'var(--primary)', backgroundColor: 'var(--primary-50)', padding: '2px 8px', borderRadius: '12px', fontWeight: 500, fontSize: '0.8rem' }}>{c.new_status_name}</span>
                     </div>
                   )}
                 </div>

@@ -6,7 +6,7 @@ const COOKIE = 'ds_session';
 
 export interface SessionPayload {
   userId: string;
-  role: 'admin' | 'channel_partner';
+  role: 'admin' | 'channel_partner' | 'platform_admin';
   name: string;
 }
 

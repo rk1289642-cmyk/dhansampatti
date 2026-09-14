@@ -9,13 +9,13 @@ export const metadata: Metadata = { title: 'Lead Details — Dhansampatti Financ
 
 export default async function AdminLeadDetailsPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getSession();
-  if (!session || session.role !== 'admin') redirect('/login');
+  if (!session || (session.role !== 'admin' && session.role !== 'platform_admin')) redirect('/login');
 
   const { id } = await params;
 
   return (
     <>
-      <Header role="admin" userName={session.name} />
+      <Header role={session.role as 'admin' | 'platform_admin'} userName={session.name} />
       <main className="page-container" style={{ padding: '0 1rem' }}>
         <LeadDetails isAdmin={true} leadId={id} />
       </main>

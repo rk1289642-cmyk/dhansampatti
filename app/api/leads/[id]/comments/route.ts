@@ -25,11 +25,9 @@ export async function GET(
     const rows = await sql`
       SELECT c.*,
              u.name AS user_name,
-             os.lead_status AS old_status_name,
              ns.lead_status AS new_status_name
       FROM lead_comments c
       JOIN users u ON u.id = c.user_id
-      LEFT JOIN lead_statuses os ON os.id = c.old_status_id
       LEFT JOIN lead_statuses ns ON ns.id = c.new_status_id
       WHERE c.lead_id = ${id}
       ORDER BY c.created_at DESC
@@ -77,8 +75,8 @@ export async function POST(
     }
 
     const commentRows = await sql`
-      INSERT INTO lead_comments (lead_id, user_id, comment_text, old_status_id, new_status_id)
-      VALUES (${id}, ${session.userId}, ${comment_text || ''}, ${oldStatusId}, ${newStatusId})
+      INSERT INTO lead_comments (lead_id, user_id, comment_text, new_status_id)
+      VALUES (${id}, ${session.userId}, ${comment_text || ''}, ${statusChanged ? newStatusId : null})
       RETURNING *
     `;
 
@@ -95,11 +93,9 @@ export async function POST(
     const fullComment = await sql`
       SELECT c.*,
              u.name AS user_name,
-             os.lead_status AS old_status_name,
              ns.lead_status AS new_status_name
       FROM lead_comments c
       JOIN users u ON u.id = c.user_id
-      LEFT JOIN lead_statuses os ON os.id = c.old_status_id
       LEFT JOIN lead_statuses ns ON ns.id = c.new_status_id
       WHERE c.id = ${newCommentId}
     `;

@@ -5,7 +5,11 @@ import Modal from '@/components/Modal';
 import { toast } from '@/components/ToastContainer';
 import { BANK_NAMES } from '@/lib/constants';
 
+const PROPERTY_ONLY  = new Set(['Legal & Technical', 'Transaction', 'PDD Clearance']);
+const PROPERTY_LOANS = new Set(['Home Loan', 'Loan Against Property (LAP)']);
+
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Lead, LoanType, LeadStatus, ChannelPartner } from './lead-types';
 import StatusBadge from './StatusBadge';
 import LeadForm from './LeadForm';
@@ -17,6 +21,7 @@ interface LeadsManagerProps {
 }
 
 export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
+  const router = useRouter();
   // Meta data
   const [loanTypes,       setLoanTypes]       = useState<LoanType[]>([]);
   const [statuses,        setStatuses]        = useState<LeadStatus[]>([]);
@@ -92,6 +97,42 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
     fetchLeads(page);
   }
 
+  async function handleStatusChange(leadId: string, newStatusId: string) {
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    const originalStatus = lead.status_id;
+    const newStatusObj = statuses.find(s => s.id === Number(newStatusId));
+    if (!newStatusObj) return;
+
+    // Optimistic update
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_id: Number(newStatusId), lead_status: newStatusObj.lead_status } : l));
+
+    const res = await fetch(`/api/leads/${leadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...lead,
+        status_id: Number(newStatusId)
+      })
+    });
+
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({ error: 'Error' }));
+      toast(d.error ?? 'Failed to update status.', 'error');
+      // Revert on error
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_id: originalStatus, lead_status: lead.lead_status } : l));
+      return;
+    }
+    toast('Status updated successfully.', 'success');
+  }
+
+  function getVisibleStatuses(loanTypeStr: string) {
+    return statuses.filter(s =>
+      PROPERTY_ONLY.has(s.lead_status) ? PROPERTY_LOANS.has(loanTypeStr) : true
+    );
+  }
+
   // ── Render ──────────────────────────────────────────────────
   return (
     <>
@@ -165,14 +206,19 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
               <tr>
                 <th>Name</th><th>Phone</th><th>Loan Type</th>
                 <th>Loan No.</th>{isAdmin && <th>Channel Partner</th>}
-                <th>Added</th><th>Actions</th>
+                <th>Added</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {leads.map(l => (
-                <tr key={l.id}>
+                <tr 
+                  key={l.id} 
+                  onClick={() => router.push(isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`)}
+                  style={{ cursor: 'pointer' }}
+                  className="hover:bg-gray-50"
+                >
                   <td style={{ fontWeight: 500, color: 'var(--gray-900)' }}>
-                    <Link href={isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`} className="text-primary hover-underline">
+                    <Link href={isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`} className="text-primary hover-underline" onClick={e => e.stopPropagation()}>
                       {l.full_name}
                     </Link>
                   </td>
@@ -184,11 +230,14 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
                     {new Date(l.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                   <td>
+                    <StatusBadge status={l.lead_status} />
+                  </td>
+                  <td>
                     <div className="action-btns">
-                      <button className="action-btn" title="Edit lead" onClick={() => setEditLead(l)}>
+                      <button className="action-btn" title="Edit lead" onClick={(e) => { e.stopPropagation(); setEditLead(l); }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
-                      <button className="action-btn danger" title="Delete lead" onClick={() => setDeleteLead(l)}>
+                      <button className="action-btn danger" title="Delete lead" onClick={(e) => { e.stopPropagation(); setDeleteLead(l); }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                       </button>
                     </div>
@@ -222,11 +271,16 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
         ) : (
           <div className="lead-card-list">
             {leads.map(l => (
-              <div key={l.id} className="lead-card">
+              <div 
+                key={l.id} 
+                className="lead-card hover:bg-gray-50" 
+                style={{ cursor: 'pointer' }}
+                onClick={() => router.push(isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`)}
+              >
                 <div className="lead-card-top">
                   <div>
                     <div className="lead-card-name">
-                      <Link href={isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`} className="text-primary hover-underline">
+                      <Link href={isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`} className="text-primary hover-underline" onClick={e => e.stopPropagation()}>
                         {l.full_name}
                       </Link>
                     </div>
@@ -242,11 +296,14 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
                   <span className="lead-card-date">
                     {new Date(l.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </span>
+                  <div style={{ marginLeft: 'auto', marginRight: '8px' }}>
+                    <StatusBadge status={l.lead_status} />
+                  </div>
                   <div className="action-btns">
-                    <button className="action-btn" onClick={() => setEditLead(l)} title="Edit">
+                    <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditLead(l); }} title="Edit">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button className="action-btn danger" onClick={() => setDeleteLead(l)} title="Delete">
+                    <button className="action-btn danger" onClick={(e) => { e.stopPropagation(); setDeleteLead(l); }} title="Delete">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
                   </div>

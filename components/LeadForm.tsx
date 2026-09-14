@@ -239,14 +239,23 @@ export default function LeadForm({ initial, isAdmin, loanTypes, statuses, channe
         </div>
       </div>
 
-      {!isCreated && (
-        <div className="form-row">
-          <div className="field" style={{ gridColumn: 'span 2' }}>
+      <div className="form-row">
+        <div className="field">
+          <label htmlFor="lf-status">Lead Status <span className="req">*</span></label>
+          <select id="lf-status" value={statusId} onChange={e => setStatusId(e.target.value)} required>
+            <option value="">Select status</option>
+            {visibleStatuses.map(s => <option key={s.id} value={s.id}>{s.lead_status}</option>)}
+          </select>
+        </div>
+        {!isCreated ? (
+          <div className="field">
             <label htmlFor="lf-loan-num">Loan Number <span className="opt">(optional)</span></label>
             <input id="lf-loan-num" type="text" placeholder="LN-00123" value={loanNumber} onChange={e => setLoanNumber(e.target.value)} />
           </div>
-        </div>
-      )}
+        ) : (
+          <div className="field" />
+        )}
+      </div>
 
       <div className="form-row">
         {stageOrder >= 2 && (

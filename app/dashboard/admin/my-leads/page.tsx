@@ -10,11 +10,11 @@ export const metadata: Metadata = { title: 'My Leads — Dhansampatti Finance' }
 
 export default async function AdminMyLeadsPage() {
   const session = await getSession();
-  if (!session || session.role !== 'admin') redirect('/login');
+  if (!session || (session.role !== 'admin' && session.role !== 'platform_admin')) redirect('/login');
 
   return (
     <>
-      <Header role="admin" userName={session.name} />
+      <Header role={session.role as 'admin' | 'platform_admin'} userName={session.name} />
       <main className="page-container">
         <div className="page-heading">
           <BackButton href="/dashboard/admin" />
