@@ -1,0 +1,1 @@
+INSERT INTO roles (role_name) VALUES ('platform_admin') ON CONFLICT DO NOTHING;

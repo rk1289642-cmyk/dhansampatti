@@ -1,22 +1,19 @@
 -- ============================================================
---  Dhansampatti Finance — Complete Database Schema
---  Merged from all migration files. Idempotent: safe to re-run.
+--  Dhansampatti Finance — Neon DB Schema
+--  Run this file once on your Neon project.
+--  Idempotent: safe to re-run.
 -- ============================================================
 
 -- ── 1. Roles ─────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS roles (
   id         SERIAL PRIMARY KEY,
-  role_name  VARCHAR(50) NOT NULL UNIQUE   -- 'admin' | 'channel_partner' | 'platform_admin'
+  role_name  VARCHAR(50) NOT NULL UNIQUE   -- 'admin' | 'channel_partner'
 );
 
-INSERT INTO roles (role_name) VALUES ('admin'), ('channel_partner'), ('platform_admin')
+INSERT INTO roles (role_name) VALUES ('admin'), ('channel_partner')
   ON CONFLICT DO NOTHING;
 
 -- ── 2. Users ─────────────────────────────────────────────────
---
--- Base columns: identity, contact, KYC
--- Migration columns (2026-06-29): CP banking details and documentation
---
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name          VARCHAR(150)        NOT NULL,
@@ -27,16 +24,7 @@ CREATE TABLE IF NOT EXISTS users (
   cp_email      VARCHAR(255),                        -- Office / CP email (optional)
   pan_card      VARCHAR(10),                         -- 10-char PAN
   role_id       INT                 NOT NULL REFERENCES roles(id) ON DELETE RESTRICT,
-  created_at    TIMESTAMPTZ         NOT NULL DEFAULT NOW(),
-  -- Migration 2026-06-29: Channel Partner details
-  mobile_no     VARCHAR(15),                         -- 10-digit Indian mobile number
-  dob           DATE,                                -- Date of birth
-  aadhar_no     VARCHAR(12),                         -- 12-digit Aadhaar (text for leading zeros)
-  bank_name     VARCHAR(255),                        -- Bank name
-  account_no    VARCHAR(30),                         -- Bank account number
-  ifsc_code     VARCHAR(11),                         -- 11-char IFSC code
-  office_address TEXT,                               -- Full office address
-  pin_code      VARCHAR(6)                           -- 6-digit PIN code
+  created_at    TIMESTAMPTZ         NOT NULL DEFAULT NOW()
 );
 
 -- ── 3. Loan Types ────────────────────────────────────────────
@@ -75,14 +63,11 @@ ON CONFLICT (lead_status) DO UPDATE
       is_terminal = EXCLUDED.is_terminal;
 
 -- ── 5. Leads ─────────────────────────────────────────────────
---
--- Base columns: lead info, status, timeline
--- Migration columns (2026-06-29): applicant employment & location details
---
 CREATE TABLE IF NOT EXISTS leads (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   full_name       VARCHAR(200)  NOT NULL,
   phone           VARCHAR(15)   NOT NULL UNIQUE,
+  dob             DATE,
   status_id       INT           NOT NULL REFERENCES lead_statuses(id) ON DELETE RESTRICT,
   loan_number     VARCHAR(100),
   loan_type_id    INT           NOT NULL REFERENCES loan_types(id) ON DELETE RESTRICT,
@@ -95,14 +80,7 @@ CREATE TABLE IF NOT EXISTS leads (
   disbursal_date  DATE,
   transaction_date DATE,
   created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW(),
-  -- Migration 2026-06-29: Employment & location info
-  company         VARCHAR(255),                      -- Applicant company / employer name
-  occupation      VARCHAR(20),                       -- 'salaried' | 'self_employed'
-  salary          NUMERIC(15,2),                     -- Monthly salary (salaried only)
-  turnover        NUMERIC(15,2),                     -- Annual turnover (self-employed only)
-  location        VARCHAR(255),                      -- City / area of applicant
-  dob             DATE                               -- Date of birth
+  updated_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
 );
 
 -- Auto-update updated_at on row change
@@ -119,40 +97,17 @@ CREATE TRIGGER trg_leads_updated_at
   BEFORE UPDATE ON leads
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
--- ── 6. Lead Comments (Migration 2026-08-14) ──────────────────
---
--- Timeline of status changes and notes on each lead
---
-CREATE TABLE IF NOT EXISTS lead_comments (
-  id              SERIAL PRIMARY KEY,
-  lead_id         UUID         NOT NULL REFERENCES leads(id) ON DELETE CASCADE,
-  user_id         UUID         NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-  comment_text    TEXT         NOT NULL,
-  new_status_id   INT          REFERENCES lead_statuses(id) ON DELETE SET NULL,
-  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
-);
+-- ── 6. Indexes ───────────────────────────────────────────────
+CREATE INDEX IF NOT EXISTS idx_leads_cp_id          ON leads (cp_id);
+CREATE INDEX IF NOT EXISTS idx_leads_status_id      ON leads (status_id);
+CREATE INDEX IF NOT EXISTS idx_leads_loan_type_id   ON leads (loan_type_id);
+CREATE INDEX IF NOT EXISTS idx_leads_created_at     ON leads (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_leads_phone          ON leads (phone);
+CREATE INDEX IF NOT EXISTS idx_leads_full_name      ON leads USING gin(to_tsvector('simple', full_name));
+CREATE INDEX IF NOT EXISTS idx_users_role_id        ON users (role_id);
+CREATE INDEX IF NOT EXISTS idx_users_email          ON users (email);
 
--- ── 7. Indexes ───────────────────────────────────────────────
---
--- Base schema indexes
-CREATE INDEX IF NOT EXISTS idx_leads_cp_id                ON leads (cp_id);
-CREATE INDEX IF NOT EXISTS idx_leads_status_id            ON leads (status_id);
-CREATE INDEX IF NOT EXISTS idx_leads_loan_type_id         ON leads (loan_type_id);
-CREATE INDEX IF NOT EXISTS idx_leads_created_at           ON leads (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_leads_phone                ON leads (phone);
-CREATE INDEX IF NOT EXISTS idx_leads_full_name            ON leads USING gin(to_tsvector('simple', full_name));
-CREATE INDEX IF NOT EXISTS idx_users_role_id              ON users (role_id);
-CREATE INDEX IF NOT EXISTS idx_users_email                ON users (email);
-
--- Migration 2026-06-29 indexes
-CREATE INDEX IF NOT EXISTS idx_leads_occupation           ON leads (occupation);
-CREATE INDEX IF NOT EXISTS idx_leads_location             ON leads (location);
-
--- Migration 2026-08-14 indexes
-CREATE INDEX IF NOT EXISTS idx_lead_comments_lead_id      ON lead_comments (lead_id);
-CREATE INDEX IF NOT EXISTS idx_lead_comments_created_at   ON lead_comments (created_at DESC);
-
--- ── 8. Row Level Security (RLS) ──────────────────────────────
+-- ── 7. Row Level Security (RLS) ──────────────────────────────
 --
 -- NOTE: Neon supports RLS. Enable it per-table, then define policies.
 -- Our application already enforces role-based isolation at the API layer
@@ -206,7 +161,7 @@ CREATE POLICY users_cp_self ON users
     AND id = current_setting('app.current_user_id', TRUE)::uuid
   );
 
--- ── 9. Seed Data — Admin Account ────────────────────────────
+-- ── 8. Seed Data — Admin Account ────────────────────────────
 --
 -- Default admin password: Admin@123
 -- bcrypt hash (rounds=12) generated for 'Admin@123':
