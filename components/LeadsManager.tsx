@@ -5,402 +5,14 @@ import Modal from '@/components/Modal';
 import { toast } from '@/components/ToastContainer';
 import { BANK_NAMES } from '@/lib/constants';
 
-// ── Types ─────────────────────────────────────────────────────
-
-interface LoanType   { id: number; loan_type: string; }
-interface LeadStatus { id: number; lead_status: string; stage_order: number; }
-interface ChannelPartner { id: string; name: string; }
-
-interface Lead {
-  id: string;
-  full_name: string;
-  phone: string;
-  dob?: string;
-  lead_status: string;
-  loan_type: string;
-  loan_number?: string;
-  cp_name: string;
-  cp_id: string;
-  status_id: number;
-  loan_type_id: number;
-  created_at: string;
-  loan_amount?: string;
-  bank_name?: string;
-  login_date?: string;
-  sanction_date?: string;
-  disbursal_date?: string;
-  transaction_date?: string;
-  company?: string;
-  occupation?: string;
-  salary?: string;
-  turnover?: string;
-  location?: string;
-}
-
-interface Pagination {
-  total: number;
-  page: number;
-  per_page: number;
-  total_pages: number;
-}
-
-// ── Constants ─────────────────────────────────────────────────
-
 const PROPERTY_ONLY  = new Set(['Legal & Technical', 'Transaction', 'PDD Clearance']);
 const PROPERTY_LOANS = new Set(['Home Loan', 'Loan Against Property (LAP)']);
 
-const STATUS_COLOR: Record<string, string> = {
-  'Lead Created':    'badge-blue',
-  'Login':           'badge-amber',
-  'Sanction':        'badge-green',
-  'Disbursal':       'badge-purple',
-  'Rejected':        'badge-red',
-  'Legal & Technical': 'badge-gray',
-  'Transaction':     'badge-gray',
-  'PDD Clearance':   'badge-gray',
-};
-
-// ── Sub-components ─────────────────────────────────────────────
-
-function StatusBadge({ status }: { status: string }) {
-  return <span className={`badge ${STATUS_COLOR[status] ?? 'badge-gray'}`}>{status}</span>;
-}
-
-// ── Validation helpers ────────────────────────────────────────
-
-/** Calendar max: today minus 18 years */
-function maxDobDate(): string {
-  const d = new Date();
-  d.setFullYear(d.getFullYear() - 18);
-  return d.toISOString().split('T')[0];
-}
-
-/** True when dateStr represents a person aged ≥ 18 */
-function isAtLeast18(dateStr: string): boolean {
-  if (!dateStr) return true;
-  const cutoff = new Date();
-  cutoff.setFullYear(cutoff.getFullYear() - 18);
-  return new Date(dateStr) <= cutoff;
-}
-
-/** True for a valid 10-digit Indian mobile number (starts 6–9) */
-function isValidIndianMobile(v: string): boolean {
-  return /^[6-9]\d{9}$/.test(v.trim());
-}
-
-// ── Lead Form (shared for Add + Edit) ─────────────────────────
-
-interface LeadFormProps {
-  initial?: Partial<Lead>;
-  isAdmin: boolean;
-  loanTypes: LoanType[];
-  statuses: LeadStatus[];
-  channelPartners: ChannelPartner[];
-  onSuccess: () => void;
-  onClose: () => void;
-}
-
-function LeadForm({ initial, isAdmin, loanTypes, statuses, channelPartners, onSuccess, onClose }: LeadFormProps) {
-  const isEdit = Boolean(initial?.id);
-
-  const [fullName,    setFullName]    = useState(initial?.full_name   ?? '');
-  const [phone,       setPhone]       = useState(initial?.phone       ?? '');
-  const [dob,         setDob]         = useState(initial?.dob         ? initial.dob.split('T')[0] : '');
-  const [statusId,    setStatusId]    = useState(String(initial?.status_id    ?? ''));
-  const [loanNumber,  setLoanNumber]  = useState(initial?.loan_number  ?? '');
-  const [loanTypeId,  setLoanTypeId]  = useState(String(initial?.loan_type_id ?? ''));
-  const [cpId,        setCpId]        = useState(initial?.cp_id        ?? '');
-
-  const [loanAmount,  setLoanAmount]  = useState(initial?.loan_amount  ?? '');
-  const [bankName,    setBankName]    = useState(initial?.bank_name    ?? '');
-  const [loginDate,   setLoginDate]   = useState(initial?.login_date   ? initial.login_date.split('T')[0] : '');
-  const [sanctionDate,setSanctionDate]= useState(initial?.sanction_date? initial.sanction_date.split('T')[0] : '');
-  const [disbursalDate,setDisbursalDate]=useState(initial?.disbursal_date? initial.disbursal_date.split('T')[0]: '');
-  const [transactionDate,setTransactionDate]=useState(initial?.transaction_date? initial.transaction_date.split('T')[0]: '');
-
-  // New fields
-  const [company,     setCompany]     = useState(initial?.company    ?? '');
-  const [occupation,  setOccupation]  = useState(initial?.occupation ?? '');
-  const [salary,      setSalary]      = useState(initial?.salary     ?? '');
-  const [turnover,    setTurnover]    = useState(initial?.turnover   ?? '');
-  const [location,    setLocation]    = useState(initial?.location   ?? '');
-
-  const [loading,     setLoading]     = useState(false);
-
-  // Inline validation errors
-  const [phoneError, setPhoneError]   = useState('');
-  const [dobError,   setDobError]     = useState('');
-  const [loanAmountError, setLoanAmountError] = useState('');
-
-  const selectedLoanTypeName = loanTypes.find(l => l.id === Number(loanTypeId))?.loan_type ?? '';
-  const visibleStatuses = statuses.filter(s =>
-    PROPERTY_ONLY.has(s.lead_status) ? PROPERTY_LOANS.has(selectedLoanTypeName) : true,
-  );
-
-  const currentStatus = statuses.find(s => s.id === Number(statusId));
-  const stageOrder = currentStatus?.stage_order ?? 0;
-  const isCreated = stageOrder <= 1;
-
-  function validatePhone(value: string) {
-    if (!value)                    { setPhoneError('Mobile number is required.'); return false; }
-    if (!/^\d+$/.test(value))      { setPhoneError('Only digits are allowed.'); return false; }
-    if (!isValidIndianMobile(value)) { setPhoneError('Enter a valid 10-digit number (starts with 6–9).'); return false; }
-    setPhoneError('');
-    return true;
-  }
-
-  function validateDob(value: string) {
-    if (!value)               { setDobError(''); return true; }
-    if (!isAtLeast18(value))  { setDobError('Applicant must be at least 18 years old.'); return false; }
-    setDobError('');
-    return true;
-  }
-
-  function validateLoanAmount(value: string) {
-    if (!value.trim()) {
-      setLoanAmountError('Loan amount is required.');
-      return false;
-    }
-    if (Number.isNaN(Number(value)) || Number(value) <= 0) {
-      setLoanAmountError('Enter a valid loan amount.');
-      return false;
-    }
-    setLoanAmountError('');
-    return true;
-  }
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    const phoneOk      = validatePhone(phone);
-    const dobOk        = validateDob(dob);
-    const loanAmountOk = validateLoanAmount(loanAmount);
-    if (!phoneOk || !dobOk || !loanAmountOk) return;
-    setLoading(true);
-
-    const body = {
-      full_name:    fullName,
-      phone,
-      dob:          dob || null,
-      status_id:    Number(statusId),
-      loan_number:  isCreated ? null : (loanNumber || null),
-      loan_type_id: Number(loanTypeId),
-      loan_amount:  loanAmount || null,
-      bank_name:    bankName || null,
-      login_date:   (stageOrder >= 2) ? (loginDate || null) : null,
-      sanction_date:(stageOrder >= 3) ? (sanctionDate || null) : null,
-      disbursal_date:(stageOrder >= 4) ? (disbursalDate || null) : null,
-      transaction_date: (PROPERTY_LOANS.has(selectedLoanTypeName) && stageOrder >= 6) ? (transactionDate || null) : null,
-      company:    company    || null,
-      occupation: occupation || null,
-      salary:     occupation === 'salaried'      ? (salary   || null) : null,
-      turnover:   occupation === 'self_employed' ? (turnover || null) : null,
-      location:   location   || null,
-      ...(isAdmin && { cp_id: cpId || undefined }),
-    };
-
-    const url    = isEdit ? `/api/leads/${initial!.id}` : '/api/leads';
-    const method = isEdit ? 'PATCH' : 'POST';
-
-    const res = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    setLoading(false);
-
-    if (!res.ok) {
-      const d = await res.json().catch(() => ({ error: 'Unknown error' }));
-      toast(d.error ?? 'Failed to save lead.', 'error');
-      return;
-    }
-
-    toast(isEdit ? 'Lead updated successfully!' : 'Lead added successfully!', 'success');
-    onSuccess();
-    onClose();
-  }
-
-  return (
-    <form onSubmit={handleSubmit} noValidate>
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="lf-fullname">Full Name <span className="req">*</span></label>
-          <input id="lf-fullname" type="text" placeholder="Rajesh Kumar" value={fullName} onChange={e => setFullName(e.target.value)} required />
-        </div>
-        <div className="field">
-          <label htmlFor="lf-phone">Phone <span className="req">*</span></label>
-          <input
-            id="lf-phone"
-            type="tel"
-            inputMode="numeric"
-            placeholder="9876543210"
-            maxLength={10}
-            value={phone}
-            onChange={e => {
-              const val = e.target.value.replace(/\D/g, '');
-              setPhone(val);
-              if (phoneError) validatePhone(val);
-            }}
-            onBlur={() => validatePhone(phone)}
-            required
-          />
-          {phoneError && <span className="field-error">{phoneError}</span>}
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="lf-dob">Date of Birth</label>
-          <input
-            id="lf-dob"
-            type="date"
-            max={maxDobDate()}
-            value={dob}
-            onChange={e => {
-              setDob(e.target.value);
-              if (dobError) validateDob(e.target.value);
-            }}
-            onBlur={() => validateDob(dob)}
-          />
-          {dobError && <span className="field-error">{dobError}</span>}
-        </div>
-        <div className="field">
-          <label htmlFor="lf-loan-type">Loan Type <span className="req">*</span></label>
-          <select id="lf-loan-type" value={loanTypeId} onChange={e => { setLoanTypeId(e.target.value); setStatusId(''); }} required>
-            <option value="">Select type</option>
-            {loanTypes.map(lt => <option key={lt.id} value={lt.id}>{lt.loan_type}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="lf-loan-amount">Loan Amount <span className="req">*</span></label>
-          <input
-            id="lf-loan-amount"
-            type="number"
-            step="0.01"
-            placeholder="500000"
-            value={loanAmount}
-            onChange={e => {
-              setLoanAmount(e.target.value);
-              if (loanAmountError) validateLoanAmount(e.target.value);
-            }}
-            onBlur={() => validateLoanAmount(loanAmount)}
-            required
-          />
-          {loanAmountError && <span className="field-error">{loanAmountError}</span>}
-        </div>
-        <div className="field">
-          <label htmlFor="lf-bank">Bank <span className="req">*</span></label>
-          <select id="lf-bank" value={bankName} onChange={e => setBankName(e.target.value)} required>
-            <option value="">Select bank</option>
-            {BANK_NAMES.map(bank => <option key={bank} value={bank}>{bank}</option>)}
-          </select>
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="field" style={!isCreated ? { gridColumn: 'span 1' } : { gridColumn: 'span 2' }}>
-          <label htmlFor="lf-status">Status <span className="req">*</span></label>
-          <select id="lf-status" value={statusId} onChange={e => setStatusId(e.target.value)} required>
-            <option value="">Select status</option>
-            {visibleStatuses.map(s => <option key={s.id} value={s.id}>{s.lead_status}</option>)}
-          </select>
-        </div>
-        {!isCreated && (
-          <div className="field">
-            <label htmlFor="lf-loan-num">Loan Number <span className="opt">(optional)</span></label>
-            <input id="lf-loan-num" type="text" placeholder="LN-00123" value={loanNumber} onChange={e => setLoanNumber(e.target.value)} />
-          </div>
-        )}
-      </div>
-
-      <div className="form-row">
-        {stageOrder >= 2 && (
-          <div className="field">
-            <label htmlFor="lf-login-date">Login Date</label>
-            <input id="lf-login-date" type="date" value={loginDate} onChange={e => setLoginDate(e.target.value)} />
-          </div>
-        )}
-        {stageOrder >= 3 && (
-          <div className="field">
-            <label htmlFor="lf-sanction-date">Sanction Date</label>
-            <input id="lf-sanction-date" type="date" value={sanctionDate} onChange={e => setSanctionDate(e.target.value)} />
-          </div>
-        )}
-      </div>
-
-      <div className="form-row">
-        {stageOrder >= 4 && (
-          <div className="field">
-            <label htmlFor="lf-disbursal-date">Disbursal Date</label>
-            <input id="lf-disbursal-date" type="date" value={disbursalDate} onChange={e => setDisbursalDate(e.target.value)} />
-          </div>
-        )}
-        {PROPERTY_LOANS.has(selectedLoanTypeName) && stageOrder >= 6 && (
-          <div className="field">
-            <label htmlFor="lf-transaction-date">Transaction Date</label>
-            <input id="lf-transaction-date" type="date" value={transactionDate} onChange={e => setTransactionDate(e.target.value)} />
-          </div>
-        )}
-      </div>
-
-      {/* ── Applicant Profile ── */}
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="lf-company">Company / Employer</label>
-          <input id="lf-company" type="text" placeholder="ABC Pvt Ltd" value={company} onChange={e => setCompany(e.target.value)} />
-        </div>
-        <div className="field">
-          <label htmlFor="lf-location">Location</label>
-          <input id="lf-location" type="text" placeholder="Mumbai, Maharashtra" value={location} onChange={e => setLocation(e.target.value)} />
-        </div>
-      </div>
-
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="lf-occupation">Occupation</label>
-          <select id="lf-occupation" value={occupation} onChange={e => { setOccupation(e.target.value); setSalary(''); setTurnover(''); }}>
-            <option value="">Select occupation</option>
-            <option value="salaried">Salaried</option>
-            <option value="self_employed">Self Employed</option>
-          </select>
-        </div>
-        {occupation === 'salaried' && (
-          <div className="field">
-            <label htmlFor="lf-salary">Monthly Salary (₹)</label>
-            <input id="lf-salary" type="number" step="0.01" placeholder="50000" value={salary} onChange={e => setSalary(e.target.value)} />
-          </div>
-        )}
-        {occupation === 'self_employed' && (
-          <div className="field">
-            <label htmlFor="lf-turnover">Annual Turnover (₹)</label>
-            <input id="lf-turnover" type="number" step="0.01" placeholder="1200000" value={turnover} onChange={e => setTurnover(e.target.value)} />
-          </div>
-        )}
-        {!occupation && <div className="field" />}
-      </div>
-
-      {isAdmin && (
-        <div className="field">
-          <label htmlFor="lf-cp">Assign Channel Partner <span className="req">*</span></label>
-          <select id="lf-cp" value={cpId} onChange={e => setCpId(e.target.value)} required={isAdmin}>
-            <option value="">Select channel partner</option>
-            {channelPartners.map(cp => <option key={cp.id} value={cp.id}>{cp.name}</option>)}
-          </select>
-        </div>
-      )}
-
-      <div className="modal-actions">
-        <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
-        <button type="submit" className="btn btn-primary btn-sm" disabled={loading}>
-          {loading ? <span className="spinner" /> : isEdit ? 'Update Lead' : 'Add Lead'}
-        </button>
-      </div>
-    </form>
-  );
-}
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { Lead, LoanType, LeadStatus, ChannelPartner } from './lead-types';
+import StatusBadge from './StatusBadge';
+import LeadForm from './LeadForm';
 
 // ── Main Leads Manager ────────────────────────────────────────
 
@@ -409,6 +21,7 @@ interface LeadsManagerProps {
 }
 
 export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
+  const router = useRouter();
   // Meta data
   const [loanTypes,       setLoanTypes]       = useState<LoanType[]>([]);
   const [statuses,        setStatuses]        = useState<LeadStatus[]>([]);
@@ -416,12 +29,11 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
 
   // Table data
   const [leads,      setLeads]      = useState<Lead[]>([]);
-  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [pagination, setPagination] = useState<{total: number; page: number; per_page: number; total_pages: number} | null>(null);
   const [fetching,   setFetching]   = useState(true);
 
   // Filters
   const [search,     setSearch]     = useState('');
-  const [statusFilt, setStatusFilt] = useState('');
   const [loanFilt,   setLoanFilt]   = useState('');
   const [cpFilt,     setCpFilt]     = useState('');
   const [page,       setPage]       = useState(1);
@@ -449,7 +61,6 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
     setFetching(true);
     const params = new URLSearchParams();
     if (search)     params.set('search',       search);
-    if (statusFilt) params.set('status_id',    statusFilt);
     if (loanFilt)   params.set('loan_type_id', loanFilt);
     if (isAdmin && cpFilt) params.set('cp_id', cpFilt);
     params.set('page', String(pg));
@@ -460,16 +71,16 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
     setLeads(data.leads ?? []);
     setPagination(data.pagination ?? null);
     setFetching(false);
-  }, [search, statusFilt, loanFilt, cpFilt, isAdmin, page]);
+  }, [search, loanFilt, cpFilt, isAdmin, page]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilt, loanFilt, cpFilt]);
+  }, [search, loanFilt, cpFilt]);
 
   useEffect(() => {
     fetchLeads(page);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, search, statusFilt, loanFilt, cpFilt]);
+  }, [page, search, loanFilt, cpFilt]);
 
   async function handleDelete() {
     if (!deleteLead) return;
@@ -484,6 +95,42 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
     toast('Lead deleted.', 'success');
     setDeleteLead(null);
     fetchLeads(page);
+  }
+
+  async function handleStatusChange(leadId: string, newStatusId: string) {
+    const lead = leads.find(l => l.id === leadId);
+    if (!lead) return;
+
+    const originalStatus = lead.status_id;
+    const newStatusObj = statuses.find(s => s.id === Number(newStatusId));
+    if (!newStatusObj) return;
+
+    // Optimistic update
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_id: Number(newStatusId), lead_status: newStatusObj.lead_status } : l));
+
+    const res = await fetch(`/api/leads/${leadId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ...lead,
+        status_id: Number(newStatusId)
+      })
+    });
+
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({ error: 'Error' }));
+      toast(d.error ?? 'Failed to update status.', 'error');
+      // Revert on error
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status_id: originalStatus, lead_status: lead.lead_status } : l));
+      return;
+    }
+    toast('Status updated successfully.', 'success');
+  }
+
+  function getVisibleStatuses(loanTypeStr: string) {
+    return statuses.filter(s =>
+      PROPERTY_ONLY.has(s.lead_status) ? PROPERTY_LOANS.has(loanTypeStr) : true
+    );
   }
 
   // ── Render ──────────────────────────────────────────────────
@@ -505,11 +152,6 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
         </div>
 
         <div className="toolbar-filters">
-          <select value={statusFilt} onChange={e => setStatusFilt(e.target.value)} aria-label="Filter by status">
-            <option value="">All Statuses</option>
-            {statuses.map(s => <option key={s.id} value={s.id}>{s.lead_status}</option>)}
-          </select>
-
           <select value={loanFilt} onChange={e => setLoanFilt(e.target.value)} aria-label="Filter by loan type">
             <option value="">All Loan Types</option>
             {loanTypes.map(lt => <option key={lt.id} value={lt.id}>{lt.loan_type}</option>)}
@@ -562,29 +204,40 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
           <table>
             <thead>
               <tr>
-                <th>Name</th><th>Phone</th><th>Loan Type</th><th>Status</th>
+                <th>Name</th><th>Phone</th><th>Loan Type</th>
                 <th>Loan No.</th>{isAdmin && <th>Channel Partner</th>}
-                <th>Added</th><th>Actions</th>
+                <th>Added</th><th>Status</th><th>Actions</th>
               </tr>
             </thead>
             <tbody>
               {leads.map(l => (
-                <tr key={l.id}>
-                  <td style={{ fontWeight: 500, color: 'var(--gray-900)' }}>{l.full_name}</td>
+                <tr 
+                  key={l.id} 
+                  onClick={() => router.push(isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`)}
+                  style={{ cursor: 'pointer' }}
+                  className="hover:bg-gray-50"
+                >
+                  <td style={{ fontWeight: 500, color: 'var(--gray-900)' }}>
+                    <Link href={isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`} className="text-primary hover-underline" onClick={e => e.stopPropagation()}>
+                      {l.full_name}
+                    </Link>
+                  </td>
                   <td>{l.phone}</td>
                   <td>{l.loan_type}</td>
-                  <td><StatusBadge status={l.lead_status} /></td>
                   <td style={{ color: 'var(--gray-500)' }}>{l.loan_number ?? '—'}</td>
                   {isAdmin && <td>{l.cp_name}</td>}
                   <td style={{ color: 'var(--gray-400)', fontSize: '.8rem' }}>
                     {new Date(l.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>
                   <td>
+                    <StatusBadge status={l.lead_status} />
+                  </td>
+                  <td>
                     <div className="action-btns">
-                      <button className="action-btn" title="Edit lead" onClick={() => setEditLead(l)}>
+                      <button className="action-btn" title="Edit lead" onClick={(e) => { e.stopPropagation(); setEditLead(l); }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                       </button>
-                      <button className="action-btn danger" title="Delete lead" onClick={() => setDeleteLead(l)}>
+                      <button className="action-btn danger" title="Delete lead" onClick={(e) => { e.stopPropagation(); setDeleteLead(l); }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                       </button>
                     </div>
@@ -618,13 +271,21 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
         ) : (
           <div className="lead-card-list">
             {leads.map(l => (
-              <div key={l.id} className="lead-card">
+              <div 
+                key={l.id} 
+                className="lead-card hover:bg-gray-50" 
+                style={{ cursor: 'pointer' }}
+                onClick={() => router.push(isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`)}
+              >
                 <div className="lead-card-top">
                   <div>
-                    <div className="lead-card-name">{l.full_name}</div>
+                    <div className="lead-card-name">
+                      <Link href={isAdmin ? `/dashboard/admin/leads/${l.id}` : `/dashboard/cp/leads/${l.id}`} className="text-primary hover-underline" onClick={e => e.stopPropagation()}>
+                        {l.full_name}
+                      </Link>
+                    </div>
                     <div className="lead-card-phone">{l.phone}</div>
                   </div>
-                  <StatusBadge status={l.lead_status} />
                 </div>
                 <div className="lead-card-meta">
                   <span className="lead-card-tag">{l.loan_type}</span>
@@ -635,11 +296,14 @@ export default function LeadsManager({ isAdmin }: LeadsManagerProps) {
                   <span className="lead-card-date">
                     {new Date(l.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </span>
+                  <div style={{ marginLeft: 'auto', marginRight: '8px' }}>
+                    <StatusBadge status={l.lead_status} />
+                  </div>
                   <div className="action-btns">
-                    <button className="action-btn" onClick={() => setEditLead(l)} title="Edit">
+                    <button className="action-btn" onClick={(e) => { e.stopPropagation(); setEditLead(l); }} title="Edit">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     </button>
-                    <button className="action-btn danger" onClick={() => setDeleteLead(l)} title="Delete">
+                    <button className="action-btn danger" onClick={(e) => { e.stopPropagation(); setDeleteLead(l); }} title="Delete">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                     </button>
                   </div>

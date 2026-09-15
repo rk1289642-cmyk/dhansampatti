@@ -92,7 +92,7 @@ export default function LoginPage() {
       return;
     }
 
-    router.push(data.role === 'admin' ? '/dashboard/admin' : '/dashboard/cp');
+    router.push(data.role === 'admin' || data.role === 'platform_admin' ? '/dashboard/admin' : '/dashboard/cp');
     router.refresh();
   }
 

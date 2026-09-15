@@ -51,12 +51,14 @@ function isAtLeast18(dateStr: string): boolean {
 
 interface PartnerFormProps {
   initial?: Partial<ChannelPartner>;
+  userRole?: string;
   onSuccess: () => void;
   onClose: () => void;
 }
 
-function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
+function PartnerForm({ initial, userRole, onSuccess, onClose }: PartnerFormProps) {
   const isEdit = Boolean(initial?.id);
+  const [targetRole, setTargetRole] = useState(initial ? (initial as any).role_name || 'channel_partner' : 'channel_partner');
 
   // Basic info
   const [name,          setName]          = useState(initial?.name           ?? '');
@@ -156,6 +158,7 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
       ifsc_code:      ifscCode.toUpperCase() || null,
       office_address: officeAddress  || null,
       pin_code:       pinCode        || null,
+      role_name:      targetRole,
     };
     if (password) body.password = password;
 
@@ -186,6 +189,18 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
 
       {/* ── Section: Basic Info ── */}
       <div className="form-section-label">Basic Information</div>
+
+      {userRole === 'admin' && (
+        <div className="form-row">
+          <div className="field">
+            <label htmlFor="pf-role">Role <span className="req">*</span></label>
+            <select id="pf-role" value={targetRole} onChange={e => setTargetRole(e.target.value)} disabled={isEdit}>
+              <option value="channel_partner">Channel Partner</option>
+              <option value="platform_admin">Platform Admin</option>
+            </select>
+          </div>
+        </div>
+      )}
 
       <div className="form-row">
         <div className="field">
@@ -227,20 +242,22 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
             </button>
           </div>
         </div>
-        <div className="field">
-          <label htmlFor="pf-gender">Gender</label>
-          <select id="pf-gender" value={gender} onChange={e => setGender(e.target.value)}>
-            <option value="">Select gender</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
       </div>
 
-      <div className="form-row">
-        <div className="field">
-          <label htmlFor="pf-mobile">Mobile No.</label>
+      {targetRole === 'channel_partner' && (
+        <>
+          <div className="form-row">
+            <div className="field">
+              <label htmlFor="pf-gender">Gender</label>
+              <select id="pf-gender" value={gender} onChange={e => setGender(e.target.value)}>
+                <option value="">Select gender</option>
+                <option value="male">Male</option>
+                <option value="female">Female</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="pf-mobile">Mobile No.</label>
           <input
             id="pf-mobile"
             type="tel"
@@ -391,11 +408,13 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
         <label htmlFor="pf-address">Residential Address</label>
         <input id="pf-address" type="text" placeholder="123 MG Road, Bengaluru" value={address} onChange={e => setAddress(e.target.value)} />
       </div>
+      </>
+      )}
 
       <div className="modal-actions">
         <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancel</button>
         <button type="submit" className="btn btn-primary btn-sm" disabled={loading || panInvalid}>
-          {loading ? <span className="spinner" /> : isEdit ? 'Update Partner' : 'Add Partner'}
+          {loading ? <span className="spinner" /> : isEdit ? (targetRole === 'platform_admin' ? 'Update Admin' : 'Update Partner') : (targetRole === 'platform_admin' ? 'Add Admin' : 'Add Partner')}
         </button>
       </div>
     </form>
@@ -404,7 +423,7 @@ function PartnerForm({ initial, onSuccess, onClose }: PartnerFormProps) {
 
 // ── Main Channel Partners Manager ─────────────────────────────
 
-export default function ChannelPartnersManager() {
+export default function ChannelPartnersManager({ userRole }: { userRole?: string }) {
   const [partners,      setPartners]      = useState<ChannelPartner[]>([]);
   const [fetching,      setFetching]      = useState(true);
   const [addOpen,       setAddOpen]       = useState(false);
@@ -450,7 +469,7 @@ export default function ChannelPartnersManager() {
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
           </svg>
-          Add Partner
+          Add User
         </button>
       </div>
 
@@ -472,8 +491,8 @@ export default function ChannelPartnersManager() {
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <p>No channel partners yet.</p>
-            <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>Add your first partner</button>
+            <p>No users yet.</p>
+            <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>Add your first user</button>
           </div>
         ) : (
           <table>
@@ -531,8 +550,8 @@ export default function ChannelPartnersManager() {
               <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
               <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
             </svg>
-            <p>No channel partners yet.</p>
-            <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>Add your first partner</button>
+            <p>No users yet.</p>
+            <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(true)}>Add your first user</button>
           </div>
         ) : (
           <div className="lead-card-list">
@@ -571,19 +590,19 @@ export default function ChannelPartnersManager() {
       </div>
 
       {/* Add Modal */}
-      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add Channel Partner" width={620}>
-        <PartnerForm onSuccess={fetchPartners} onClose={() => setAddOpen(false)} />
+      <Modal open={addOpen} onClose={() => setAddOpen(false)} title="Add User" width={620}>
+        <PartnerForm onSuccess={fetchPartners} onClose={() => setAddOpen(false)} userRole={userRole} />
       </Modal>
 
       {/* Edit Modal */}
-      <Modal open={Boolean(editPartner)} onClose={() => setEditPartner(null)} title="Edit Channel Partner" width={620}>
+      <Modal open={Boolean(editPartner)} onClose={() => setEditPartner(null)} title="Edit User" width={620}>
         {editPartner && (
-          <PartnerForm initial={editPartner} onSuccess={fetchPartners} onClose={() => setEditPartner(null)} />
+          <PartnerForm initial={editPartner} onSuccess={fetchPartners} onClose={() => setEditPartner(null)} userRole={userRole} />
         )}
       </Modal>
 
       {/* Delete Confirmation */}
-      <Modal open={Boolean(deletePartner)} onClose={() => setDeletePartner(null)} title="Delete Channel Partner" width={420}>
+      <Modal open={Boolean(deletePartner)} onClose={() => setDeletePartner(null)} title="Delete User" width={420}>
         <p style={{ color: 'var(--gray-600)', marginBottom: 8 }}>
           Are you sure you want to delete <strong>{deletePartner?.name}</strong>?
           This will fail if they have active leads assigned.

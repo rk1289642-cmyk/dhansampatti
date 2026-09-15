@@ -3,47 +3,52 @@ import bcrypt from 'bcryptjs';
 import sql from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
-// GET /api/users/channel-partners — admin only
+// GET /api/users/channel-partners
 export async function GET() {
   const session = await getSession();
-  if (!session || session.role !== 'admin') {
+  if (!session || (session.role !== 'admin' && session.role !== 'platform_admin')) {
     return Response.json({ error: 'Forbidden' }, { status: 403 });
   }
+
+  const roleNames = session.role === 'admin' ? ['channel_partner', 'platform_admin'] : ['channel_partner'];
 
   const rows = await sql`
     SELECT u.id, u.name, u.email, u.address, u.gender, u.cp_email, u.pan_card,
            u.mobile_no, u.dob, u.aadhar_no, u.bank_name, u.account_no,
            u.ifsc_code, u.office_address, u.pin_code, u.created_at,
+           r.role_name,
            COUNT(l.id)::text AS lead_count
     FROM users u
     JOIN roles r ON r.id = u.role_id
     LEFT JOIN leads l ON l.cp_id = u.id
-    WHERE r.role_name = 'channel_partner'
-    GROUP BY u.id
+    WHERE r.role_name = ANY(${roleNames as any})
+    GROUP BY u.id, r.role_name
     ORDER BY u.created_at DESC
   `;
 
   return Response.json(rows);
 }
 
-// POST /api/users/channel-partners — admin only
+// POST /api/users/channel-partners
 export async function POST(request: NextRequest) {
   const session = await getSession();
-  if (!session || session.role !== 'admin') {
+  if (!session || (session.role !== 'admin' && session.role !== 'platform_admin')) {
     return Response.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const {
     name, email, password, address, gender, cp_email, pan_card,
     mobile_no, dob, aadhar_no, bank_name, account_no,
-    ifsc_code, office_address, pin_code,
+    ifsc_code, office_address, pin_code, role_name
   } = await request.json();
 
   if (!name || !email || !password) {
     return Response.json({ error: 'Name, email and password are required.' }, { status: 400 });
   }
 
-  const cpRoleRow = await sql`SELECT id FROM roles WHERE role_name = 'channel_partner' LIMIT 1`;
+  const targetRole = (session.role === 'admin' && role_name === 'platform_admin') ? 'platform_admin' : 'channel_partner';
+
+  const cpRoleRow = await sql`SELECT id FROM roles WHERE role_name = ${targetRole} LIMIT 1`;
   const roleId = cpRoleRow[0]?.id;
 
   const hash = await bcrypt.hash(password, 12);

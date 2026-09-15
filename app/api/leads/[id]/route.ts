@@ -2,6 +2,43 @@ import { NextRequest } from 'next/server';
 import sql from '@/lib/db';
 import { getSession } from '@/lib/auth';
 
+// GET /api/leads/[id] — fetch a single lead
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await params;
+
+  try {
+    const scopeCondition =
+      session.role === 'channel_partner' ? sql`l.cp_id = ${session.userId}` : sql`TRUE`;
+
+    const rows = await sql`
+      SELECT l.*,
+             ls.lead_status, lt.loan_type, u.name AS cp_name, u.email AS cp_email,
+             creator.name AS created_by_name
+      FROM leads l
+      JOIN lead_statuses ls ON ls.id = l.status_id
+      JOIN loan_types    lt ON lt.id = l.loan_type_id
+      JOIN users          u ON u.id  = l.cp_id
+      JOIN users    creator ON creator.id = l.created_by
+      WHERE l.id = ${id} AND ${scopeCondition}
+    `;
+
+    if (!rows.length) {
+      return Response.json({ error: 'Lead not found or access denied' }, { status: 404 });
+    }
+
+    return Response.json(rows[0]);
+  } catch (err: any) {
+    console.error('API Error /api/leads/[id] GET:', err);
+    return Response.json({ error: err.message }, { status: 500 });
+  }
+}
+
 // PATCH /api/leads/[id] — update a lead
 export async function PATCH(
   request: NextRequest,

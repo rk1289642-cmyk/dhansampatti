@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 interface HeaderProps {
-  role: 'admin' | 'channel_partner';
+  role: 'admin' | 'platform_admin' | 'channel_partner';
   userName: string;
 }
 
@@ -15,6 +15,8 @@ export default function Header({ role, userName }: HeaderProps) {
   const [drawerOpen,    setDrawerOpen]    = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [loggingOut,    setLoggingOut]    = useState(false);
+  const [leadsMenuOpen, setLeadsMenuOpen] = useState(false);
+  const [commentsMenuOpen, setCommentsMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const confirmRef  = useRef<HTMLDivElement>(null);
 
@@ -57,8 +59,8 @@ export default function Header({ role, userName }: HeaderProps) {
   }
 
   const initials = userName.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
-  const dashHref    = role === 'admin' ? '/dashboard/admin' : '/dashboard/cp';
-  const profileHref = role === 'admin' ? '/dashboard/admin/profile' : '/dashboard/cp/profile';
+  const dashHref    = (role === 'admin' || role === 'platform_admin') ? '/dashboard/admin' : '/dashboard/cp';
+  const profileHref = (role === 'admin' || role === 'platform_admin') ? '/dashboard/admin/profile' : '/dashboard/cp/profile';
 
   return (
     <>
@@ -77,16 +79,80 @@ export default function Header({ role, userName }: HeaderProps) {
 
         {/* Desktop nav */}
         <nav className="header-nav desktop-nav">
-          {role === 'admin' && (
+          {(role === 'admin' || role === 'platform_admin') && (
             <>
-              <Link href="/dashboard/admin/channel-partners" className="btn btn-ghost btn-sm">
+              <Link href="/dashboard/admin/users" className="btn btn-ghost btn-sm">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                Channel Partners
+                Users
               </Link>
-              <Link href="/dashboard/admin/leads" className="btn btn-ghost btn-sm">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                All Leads
-              </Link>
+              <div className="relative">
+  <button
+    className="btn btn-ghost btn-sm"
+    onClick={() => setLeadsMenuOpen(!leadsMenuOpen)}
+  >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+    </svg>
+
+    Leads
+    <span style={{ marginLeft: 6 }}>▼</span>
+  </button>
+
+  {leadsMenuOpen && (
+    <div className="dropdown-menu">
+      <Link
+        href="/dashboard/admin/leads"
+        className="dropdown-item"
+        onClick={() => setLeadsMenuOpen(false)}
+      >
+        All Leads
+      </Link>
+
+      <Link
+        href="/dashboard/admin/my-leads"
+        className="dropdown-item"
+        onClick={() => setLeadsMenuOpen(false)}
+      >
+        My Leads
+      </Link>
+    </div>
+  )}
+</div>
+              <div className="relative">
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => setCommentsMenuOpen(!commentsMenuOpen)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" strokeWidth="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                  Comments
+                  <span style={{ marginLeft: 6 }}>▼</span>
+                </button>
+
+                {commentsMenuOpen && (
+                  <div className="dropdown-menu">
+                    <Link
+                      href="/dashboard/admin/all-comments"
+                      className="dropdown-item"
+                      onClick={() => setCommentsMenuOpen(false)}
+                    >
+                      All Comments
+                    </Link>
+
+                    <Link
+                      href="/dashboard/admin/my-comments"
+                      className="dropdown-item"
+                      onClick={() => setCommentsMenuOpen(false)}
+                    >
+                      My Comments
+                    </Link>
+                  </div>
+                )}
+              </div>
             </>
           )}
           {role === 'channel_partner' && (
@@ -101,7 +167,7 @@ export default function Header({ role, userName }: HeaderProps) {
               <div className="dropdown-menu" role="menu">
                 <div className="dropdown-header">
                   <strong>{userName}</strong>
-                  <p>{role === 'admin' ? 'Administrator' : 'Channel Partner'}</p>
+                  <p>{role === 'admin' ? 'Administrator' : role === 'platform_admin' ? 'Platform Admin' : 'Channel Partner'}</p>
                 </div>
                 <Link href={profileHref} className="dropdown-item" onClick={() => setDropdownOpen(false)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
@@ -131,7 +197,7 @@ export default function Header({ role, userName }: HeaderProps) {
                 <div className="drawer-avatar">{initials}</div>
                 <div>
                   <div className="drawer-user-name">{userName}</div>
-                  <div className="drawer-user-role">{role === 'admin' ? 'Administrator' : 'Channel Partner'}</div>
+                  <div className="drawer-user-role">{role === 'admin' ? 'Administrator' : role === 'platform_admin' ? 'Platform Admin' : 'Channel Partner'}</div>
                 </div>
               </div>
               <button className="drawer-close" onClick={() => setDrawerOpen(false)} aria-label="Close menu">
@@ -149,9 +215,21 @@ export default function Header({ role, userName }: HeaderProps) {
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                     All Leads
                   </Link>
-                  <Link href="/dashboard/admin/channel-partners" className="drawer-link" onClick={() => setDrawerOpen(false)}>
+                  <Link href="/dashboard/admin/my-leads" className="drawer-link" onClick={() => setDrawerOpen(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    My Leads
+                  </Link>
+                  <Link href="/dashboard/admin/users" className="drawer-link" onClick={() => setDrawerOpen(false)}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-                    Channel Partners
+                    Users
+                  </Link>
+                  <Link href="/dashboard/admin/all-comments" className="drawer-link" onClick={() => setDrawerOpen(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                    All Comments
+                  </Link>
+                  <Link href="/dashboard/admin/my-comments" className="drawer-link" onClick={() => setDrawerOpen(false)}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                    My Comments
                   </Link>
                 </>
               )}

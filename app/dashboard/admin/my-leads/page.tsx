@@ -6,9 +6,9 @@ import ToastContainer from '@/components/ToastContainer';
 import BackButton from '@/components/BackButton';
 import type { Metadata } from 'next';
 
-export const metadata: Metadata = { title: 'All Leads — Dhansampatti Finance' };
+export const metadata: Metadata = { title: 'My Leads — Dhansampatti Finance' };
 
-export default async function AdminLeadsPage() {
+export default async function AdminMyLeadsPage() {
   const session = await getSession();
   if (!session || (session.role !== 'admin' && session.role !== 'platform_admin')) redirect('/login');
 
@@ -19,8 +19,8 @@ export default async function AdminLeadsPage() {
         <div className="page-heading">
           <BackButton href="/dashboard/admin" />
           <div>
-            <h1 className="section-title">Leads Management</h1>
-            <p className="page-sub">Search, filter and manage all leads across channel partners.</p>
+            <h1 className="section-title">My Leads</h1>
+            <p className="page-sub">Search, filter and manage your leads.</p>
           </div>
         </div>
         <div className="card" style={{ overflow: 'hidden' }}>

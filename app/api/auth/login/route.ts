@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'Invalid email or password.' }, { status: 401 });
   }
 
-  const role = user.role_name === 'admin' ? 'admin' : 'channel_partner';
+  const role = user.role_name === 'admin' ? 'admin' : user.role_name === 'platform_admin' ? 'platform_admin' : 'channel_partner';
   const token = await signToken({ userId: user.id, role, name: user.name });
   await setSessionCookie(token);
 

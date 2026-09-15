@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import sql from '@/lib/db';
 import Header from '@/components/Header';
 import BackButton from '@/components/BackButton';
+import EditProfile from '@/components/EditProfile';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = { title: 'My Profile — Dhansampatti Finance' };
@@ -86,6 +87,8 @@ export default async function CPProfile() {
               mono
               last
             />
+            
+            <EditProfile user={user} isCp={true} />
           </div>
         </div>
       </main>

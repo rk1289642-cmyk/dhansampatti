@@ -18,7 +18,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Role-based route guard
-  if (pathname.startsWith('/dashboard/admin') && session.role !== 'admin') {
+  if (pathname.startsWith('/dashboard/admin') && (session.role !== 'admin' && session.role !== 'platform_admin')) {
     return NextResponse.redirect(new URL('/dashboard/cp', request.url));
   }
   if (pathname.startsWith('/dashboard/cp') && session.role !== 'channel_partner') {
